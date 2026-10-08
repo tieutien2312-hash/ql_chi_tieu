@@ -13,13 +13,13 @@
 ## Công nghệ sử dụng
 
 - **Android Native Notification Listener Service**:
-  • Lắng nghe thông báo từ các ứng dụng ngân hàng và ví điện tử phổ biến: Vietcombank, MB Bank, Agribank, BIDV, Momo, ZaloPay, Techcombank,...
-  • Sử dụng Regex để tự động phân tích:
-    ◦ Số tiền (Amount)
-    ◦ Loại giao dịch (Thu nhập / Chi tiêu)
-    ◦ Số dư sau giao dịch (Balance after)
-    ◦ Số tài khoản / Ví (Account number)
-  • Tự động kiểm tra: Nếu tài khoản chưa tồn tại trong SQLite, ứng dụng sẽ tự động tạo tài khoản mới; nếu đã có, tự động ghi nhận giao dịch và cập nhật số dư.
+  - Lắng nghe thông báo từ các ứng dụng ngân hàng và ví điện tử phổ biến: Vietcombank, MB Bank, Agribank, BIDV, Momo, ZaloPay, Techcombank,...
+  - Sử dụng Regex để tự động phân tích:
+    - Số tiền (Amount)
+    - Loại giao dịch (Thu nhập / Chi tiêu)
+    - Số dư sau giao dịch (Balance after)
+    - Số tài khoản / Ví (Account number)
+  - Tự động kiểm tra: Nếu tài khoản chưa tồn tại trong SQLite, ứng dụng sẽ tự động tạo tài khoản mới; nếu đã có, tự động ghi nhận giao dịch và cập nhật số dư.
 - **Flutter và Dart**: xây dựng ứng dụng di động đa nền tảng. Dự án yêu cầu Dart SDK tương thích với `^3.13.3` (khai báo trong `pubspec.yaml`).
 - **SQLite (`sqflite`)**: lưu dữ liệu tài khoản, giao dịch và danh mục trên thiết bị.
 - **`fl_chart`**: hiển thị biểu đồ thống kê.
