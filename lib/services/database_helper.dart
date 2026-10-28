@@ -22,9 +22,39 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 3,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+      onOpen: (db) async {
+        await _ensureCategoryColumnsExist(db);
+      },
     );
+  }
+
+  Future<void> _ensureCategoryColumnsExist(Database db) async {
+    try {
+      final tableInfo = await db.rawQuery("PRAGMA table_info(categories)");
+      final columns = tableInfo.map((col) => col['name'].toString()).toList();
+      
+      if (!columns.contains('type')) {
+        await db.execute("ALTER TABLE categories ADD COLUMN type TEXT NOT NULL DEFAULT 'EXPENSE'");
+      }
+      if (!columns.contains('color')) {
+        await db.execute("ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '#6366F1'");
+      }
+      if (!columns.contains('isActive')) {
+        if (columns.contains('sActive')) {
+          await db.execute("ALTER TABLE categories RENAME COLUMN sActive TO isActive");
+        } else {
+          await db.execute("ALTER TABLE categories ADD COLUMN isActive INTEGER NOT NULL DEFAULT 1");
+        }
+      }
+    } catch (e) {
+      try {
+        await db.execute("DROP TABLE IF EXISTS categories");
+        await _createCategoriesTable(db);
+      } catch (_) {}
+    }
   }
 
   Future _createDB(Database db, int version) async {
@@ -54,28 +84,51 @@ class DatabaseHelper {
       )
     ''');
 
+    await _createCategoriesTable(db);
+  }
+
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 3) {
+      await _ensureCategoryColumnsExist(db);
+    }
+  }
+
+  Future _createCategoriesTable(Database db) async {
     await db.execute('''
-      CREATE TABLE categories (
+      CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        icon TEXT NOT NULL
+        type TEXT NOT NULL DEFAULT 'EXPENSE',
+        color TEXT NOT NULL DEFAULT '#6366F1',
+        icon TEXT NOT NULL,
+        isActive INTEGER NOT NULL DEFAULT 1
       )
     ''');
 
-    // Seed default categories
-    List<Map<String, dynamic>> defaultCategories = [
-      {'name': 'Ăn uống', 'icon': 'restaurant'},
-      {'name': 'Mua sắm', 'icon': 'shopping_bag'},
-      {'name': 'Di chuyển', 'icon': 'directions_car'},
-      {'name': 'Hóa đơn', 'icon': 'receipt'},
-      {'name': 'Giải trí', 'icon': 'sports_esports'},
-      {'name': 'Lương', 'icon': 'work'},
-      {'name': 'Chuyển tiền', 'icon': 'swap_horiz'},
-      {'name': 'Khác', 'icon': 'more_horiz'},
-    ];
+    final countResult = await db.rawQuery('SELECT COUNT(*) as count FROM categories');
+    int count = 0;
+    if (countResult.isNotEmpty && countResult.first['count'] != null) {
+      count = (countResult.first['count'] as num).toInt();
+    }
 
-    for (var cat in defaultCategories) {
-      await db.insert('categories', cat);
+    if (count == 0) {
+      List<Map<String, dynamic>> defaultCategories = [
+        {'name': 'Ăn uống', 'type': 'EXPENSE', 'color': '#F97316', 'icon': 'restaurant', 'isActive': 1},
+        {'name': 'Mua sắm', 'type': 'EXPENSE', 'color': '#EC4899', 'icon': 'shopping_bag', 'isActive': 1},
+        {'name': 'Di chuyển', 'type': 'EXPENSE', 'color': '#3B82F6', 'icon': 'directions_car', 'isActive': 1},
+        {'name': 'Hóa đơn', 'type': 'EXPENSE', 'color': '#8B5CF6', 'icon': 'receipt', 'isActive': 1},
+        {'name': 'Giải trí', 'type': 'EXPENSE', 'color': '#10B981', 'icon': 'sports_esports', 'isActive': 1},
+        {'name': 'Sức khỏe', 'type': 'EXPENSE', 'color': '#EF4444', 'icon': 'favorite', 'isActive': 1},
+        {'name': 'Học tập', 'type': 'EXPENSE', 'icon': 'school', 'color': '#0EA5E9', 'isActive': 1},
+        {'name': 'Lương', 'type': 'INCOME', 'color': '#10B981', 'icon': 'work', 'isActive': 1},
+        {'name': 'Tiền thưởng', 'type': 'INCOME', 'color': '#F59E0B', 'icon': 'card_giftcard', 'isActive': 1},
+        {'name': 'Thu nhập khác', 'type': 'INCOME', 'color': '#6366F1', 'icon': 'attach_money', 'isActive': 1},
+        {'name': 'Khác', 'type': 'EXPENSE', 'color': '#6B7280', 'icon': 'more_horiz', 'isActive': 1},
+      ];
+
+      for (var cat in defaultCategories) {
+        await db.insert('categories', cat);
+      }
     }
   }
 
@@ -93,7 +146,6 @@ class DatabaseHelper {
 
   Future<Account?> getAccountByNumberOrBank(String bankName, String accountNumber) async {
     final db = await database;
-    // Normalize or search partial match on account number
     final result = await db.query(
       'accounts',
       where: 'bankName LIKE ? AND accountNumber LIKE ?',
@@ -102,7 +154,6 @@ class DatabaseHelper {
     if (result.isNotEmpty) {
       return Account.fromMap(result.first);
     }
-    // Fallback: search just by account number if bank name varies
     final result2 = await db.query(
       'accounts',
       where: 'accountNumber LIKE ?',
@@ -135,7 +186,6 @@ class DatabaseHelper {
     final db = await database;
     int id = await db.insert('transactions', transaction.toMap());
     
-    // Also update account balance automatically
     final accountResult = await db.query(
       'accounts',
       where: 'id = ?',
@@ -169,25 +219,106 @@ class DatabaseHelper {
     return result.map((json) => TransactionModel.fromMap(json)).toList();
   }
 
+  Future<int> deleteTransaction(int transactionId) async {
+    final db = await database;
+    final txResult = await db.query('transactions', where: 'id = ?', whereArgs: [transactionId]);
+    if (txResult.isNotEmpty) {
+      final tx = TransactionModel.fromMap(txResult.first);
+      final accResult = await db.query('accounts', where: 'id = ?', whereArgs: [tx.accountId]);
+      if (accResult.isNotEmpty) {
+        double currentBalance = (accResult.first['balance'] as num).toDouble();
+        double restoredBalance = tx.type == 'INCOME'
+            ? currentBalance - tx.amount
+            : currentBalance + tx.amount;
+        await updateAccountBalance(tx.accountId, restoredBalance);
+      }
+      return await db.delete('transactions', where: 'id = ?', whereArgs: [transactionId]);
+    }
+    return 0;
+  }
+
+  Future<int> updateTransactionCategory(int transactionId, String category) async {
+    final db = await database;
+    return await db.update(
+      'transactions',
+      {'category': category},
+      where: 'id = ?',
+      whereArgs: [transactionId],
+    );
+  }
+
+  // ---- CATEGORY OPERATIONS ----
+  Future<List<CategoryModel>> getCategories() async {
+    final db = await database;
+    try {
+      final result = await db.query('categories', where: 'isActive = 1');
+      return result.map((json) => CategoryModel.fromMap(json)).toList();
+    } catch (_) {
+      // Fallback if isActive column is missing
+      final result = await db.query('categories');
+      return result.map((json) => CategoryModel.fromMap(json)).toList();
+    }
+  }
+
+  Future<int> insertCategory(CategoryModel category) async {
+    final db = await database;
+    return await db.insert('categories', category.toMap());
+  }
+
+  Future<int> updateCategory(CategoryModel category) async {
+    final db = await database;
+    return await db.update(
+      'categories',
+      category.toMap(),
+      where: 'id = ?',
+      whereArgs: [category.id],
+    );
+  }
+
+  Future<int> deleteCategorySafe(int categoryId, String targetCategoryName) async {
+    final db = await database;
+    final catResult = await db.query('categories', where: 'id = ?', whereArgs: [categoryId]);
+    if (catResult.isNotEmpty) {
+      final catName = catResult.first['name'] as String;
+      await db.update(
+        'transactions',
+        {'category': targetCategoryName},
+        where: 'category = ?',
+        whereArgs: [catName],
+      );
+      return await db.delete('categories', where: 'id = ?', whereArgs: [categoryId]);
+    }
+    return 0;
+  }
+
+  Future<int> countTransactionsWithCategory(String categoryName) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM transactions WHERE category = ?',
+      [categoryName],
+    );
+    if (result.isNotEmpty && result.first['count'] != null) {
+      return (result.first['count'] as num).toInt();
+    }
+    return 0;
+  }
+
   // ---- STATISTICS & SUMMARIES ----
   Future<Map<String, double>> getSummaryTotals() async {
     final db = await database;
     
-    // Total balance across all accounts
     final accResult = await db.rawQuery('SELECT SUM(balance) as totalBalance FROM accounts');
     double totalBalance = 0.0;
     if (accResult.isNotEmpty && accResult.first['totalBalance'] != null) {
       totalBalance = (accResult.first['totalBalance'] as num).toDouble();
     }
 
-    // Total income
     final incomeResult = await db.rawQuery("SELECT SUM(amount) as totalIncome FROM transactions WHERE type = 'INCOME'");
     double totalIncome = 0.0;
     if (incomeResult.isNotEmpty && incomeResult.first['totalIncome'] != null) {
       totalIncome = (incomeResult.first['totalIncome'] as num).toDouble();
     }
 
-    // Total expense
     final expenseResult = await db.rawQuery("SELECT SUM(amount) as totalExpense FROM transactions WHERE type = 'EXPENSE'");
     double totalExpense = 0.0;
     if (expenseResult.isNotEmpty && expenseResult.first['totalExpense'] != null) {
@@ -199,11 +330,5 @@ class DatabaseHelper {
       'totalIncome': totalIncome,
       'totalExpense': totalExpense,
     };
-  }
-
-  Future<List<CategoryModel>> getCategories() async {
-    final db = await database;
-    final result = await db.query('categories');
-    return result.map((json) => CategoryModel.fromMap(json)).toList();
   }
 }

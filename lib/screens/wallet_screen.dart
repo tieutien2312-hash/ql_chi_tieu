@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/account.dart';
 import '../services/database_helper.dart';
+import '../theme/app_theme.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -30,6 +31,11 @@ class _WalletScreenState extends State<WalletScreen> {
     });
   }
 
+  String _maskAccountNumber(String number) {
+    if (number.length <= 4) return number;
+    return '••••${number.substring(number.length - 4)}';
+  }
+
   void _showAddAccountDialog() {
     final bankController = TextEditingController(text: 'Vietcombank');
     final nameController = TextEditingController(text: 'Tài khoản chính');
@@ -49,14 +55,17 @@ class _WalletScreenState extends State<WalletScreen> {
                   controller: bankController,
                   decoration: const InputDecoration(labelText: 'Tên Ngân hàng / Ví (VD: MB Bank, Momo)'),
                 ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(labelText: 'Tên gợi nhớ (VD: Tài khoản cá nhân)'),
                 ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: numberController,
                   decoration: const InputDecoration(labelText: 'Số tài khoản / Số điện thoại'),
                 ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: balanceController,
                   keyboardType: TextInputType.number,
@@ -68,9 +77,10 @@ class _WalletScreenState extends State<WalletScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Hủy'),
+              child: const Text('Hủy', style: TextStyle(color: AppTheme.textSecondary)),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryCyan, foregroundColor: Colors.white),
               onPressed: () async {
                 final bank = bankController.text.trim();
                 final name = nameController.text.trim();
@@ -106,8 +116,8 @@ class _WalletScreenState extends State<WalletScreen> {
             title: const Text('Xác nhận xóa'),
             content: const Text('Bạn có chắc chắn muốn xóa tài khoản này và tất cả giao dịch liên quan?'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xóa', style: TextStyle(color: Colors.red))),
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy', style: TextStyle(color: AppTheme.textSecondary))),
+              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xóa', style: TextStyle(color: AppTheme.errorRed))),
             ],
           ),
         ) ??
@@ -122,18 +132,23 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundLight,
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryCyan))
           : RefreshIndicator(
               onRefresh: _loadAccounts,
+              color: AppTheme.primaryCyan,
               child: _accounts.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text('Chưa có tài khoản nào được lưu.'),
+                          Icon(Icons.account_balance_wallet_outlined, size: 64, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          const Text('Chưa có tài khoản nào được lưu.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryCyan, foregroundColor: Colors.white),
                             onPressed: _showAddAccountDialog,
                             icon: const Icon(Icons.add),
                             label: const Text('Thêm tài khoản thủ công'),
@@ -148,16 +163,19 @@ class _WalletScreenState extends State<WalletScreen> {
                         final acc = _accounts[index];
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: const BorderSide(color: AppTheme.borderLight),
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Row(
                               children: [
                                 CircleAvatar(
-                                  radius: 24,
-                                  backgroundColor: Colors.indigo.shade50,
-                                  child: const Icon(Icons.account_balance, color: Colors.indigo),
+                                  radius: 26,
+                                  backgroundColor: AppTheme.primaryCyan.withOpacity(0.15),
+                                  child: const Icon(Icons.account_balance, color: AppTheme.primaryCyanDark),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -166,27 +184,27 @@ class _WalletScreenState extends State<WalletScreen> {
                                     children: [
                                       Text(
                                         acc.bankName,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${acc.accountName} (${acc.accountNumber})',
-                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                                        '${acc.accountName} (${_maskAccountNumber(acc.accountNumber)})',
+                                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
                                       ),
-                                      const SizedBox(height: 6),
+                                      const SizedBox(height: 8),
                                       Text(
-                                        '${_currencyFormat.format(acc.balance)} đ',
+                                        '${_currencyFormat.format(acc.balance)} VNĐ',
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 16,
-                                          color: Colors.indigo,
+                                          color: AppTheme.primaryCyanDark,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                  icon: const Icon(Icons.delete_outline, color: AppTheme.errorRed),
                                   onPressed: () => _deleteAccount(acc.id!),
                                 ),
                               ],
@@ -198,6 +216,8 @@ class _WalletScreenState extends State<WalletScreen> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddAccountDialog,
+        backgroundColor: AppTheme.primaryCyan,
+        foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       ),
     );
