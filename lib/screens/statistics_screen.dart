@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/transaction_model.dart';
 import '../models/category.dart';
-import '../services/database_helper.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class MonthlyStat {
@@ -61,8 +61,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       _errorMessage = null;
     });
     try {
-      final txs = await DatabaseHelper.instance.getTransactions();
-      final cats = await DatabaseHelper.instance.getCategories();
+      final txs = await ApiService.getTransactions();
+      final cats = await ApiService.getCategories();
       setState(() {
         _transactions = txs;
         _categories = cats;

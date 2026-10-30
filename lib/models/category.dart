@@ -1,5 +1,5 @@
 class CategoryModel {
-  final int? id;
+  final dynamic id;
   final String name;
   final String type; // 'EXPENSE' or 'INCOME'
   final String color; // Hex color string e.g. '#F97316'
@@ -27,18 +27,19 @@ class CategoryModel {
   }
 
   factory CategoryModel.fromMap(Map<String, dynamic> map) {
+    bool activeBool = map['isActive'] ?? map['IsActive'] ?? true;
     return CategoryModel(
-      id: map['id'],
-      name: map['name'] ?? '',
-      type: map['type'] ?? 'EXPENSE',
-      color: map['color'] ?? '#6366F1',
-      icon: map['icon'] ?? 'category',
-      isActive: map['isActive'] ?? 1,
+      id: map['id'] ?? map['Id'],
+      name: map['name'] ?? map['Name'] ?? '',
+      type: map['type'] ?? map['Type'] ?? 'EXPENSE',
+      color: map['color'] ?? map['Color'] ?? '#6366F1',
+      icon: map['icon'] ?? map['Icon'] ?? 'category',
+      isActive: activeBool ? 1 : 0,
     );
   }
 
   CategoryModel copyWith({
-    int? id,
+    dynamic id,
     String? name,
     String? type,
     String? color,

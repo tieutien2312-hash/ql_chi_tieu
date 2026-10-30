@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/transaction_model.dart';
 import '../models/account.dart';
 import '../models/category.dart';
-import '../services/database_helper.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class TransactionScreen extends StatefulWidget {
@@ -24,13 +24,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _filterType = 'ALL'; // ALL, INCOME, EXPENSE
-  int? _filterAccountId;
+  dynamic _filterAccountId;
   String? _filterCategory;
   DateTimeRange? _filterDateRange;
 
   // Multi-select state
   bool _isSelecting = false;
-  final Set<int> _selectedIds = {};
+  final Set<dynamic> _selectedIds = {};
 
   final NumberFormat _currencyFormat = NumberFormat('#,###', 'vi_VN');
 
@@ -57,9 +57,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
       _errorMessage = null;
     });
     try {
-      final txs = await DatabaseHelper.instance.getTransactions();
-      final accs = await DatabaseHelper.instance.getAccounts();
-      final cats = await DatabaseHelper.instance.getCategories();
+      final txs = await ApiService.getTransactions();
+      final accs = await ApiService.getAccounts();
+      final cats = await ApiService.getCategories();
 
       setState(() {
         _allTransactions = txs;
@@ -81,9 +81,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
   }
 
-  Account? _getAccountForTx(int accountId) {
+  Account? _getAccountForTx(dynamic accountId) {
     try {
-      return _accounts.firstWhere((acc) => acc.id == accountId);
+      return _accounts.firstWhere((acc) => acc.id.toString() == accountId.toString());
     } catch (_) {
       return null;
     }
@@ -94,14 +94,42 @@ class _TransactionScreenState extends State<TransactionScreen> {
     return '••••${number.substring(number.length - 4)}';
   }
 
+  DateTime? _parseDateTime(String rawTime) {
+    try {
+      if (rawTime.contains('T') || (rawTime.contains('-') && !rawTime.contains('/'))) {
+        return DateTime.parse(rawTime);
+      }
+      final parts = rawTime.split(' ');
+      if (parts.isNotEmpty) {
+        final dParts = parts[0].split('/');
+        if (dParts.length == 3) {
+          int day = int.parse(dParts[0]);
+          int month = int.parse(dParts[1]);
+          int year = int.parse(dParts[2]);
+          int hour = 0;
+          int minute = 0;
+          if (parts.length > 1) {
+            final tParts = parts[1].split(':');
+            if (tParts.length >= 2) {
+              hour = int.parse(tParts[0]);
+              minute = int.parse(tParts[1]);
+            }
+          }
+          return DateTime(year, month, day, hour, minute);
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   List<TransactionModel> get _filteredTransactions {
-    return _allTransactions.where((tx) {
+    final list = _allTransactions.where((tx) {
       // 1. Type filter
       if (_filterType == 'INCOME' && tx.type != 'INCOME') return false;
       if (_filterType == 'EXPENSE' && tx.type != 'EXPENSE') return false;
 
       // 2. Account filter
-      if (_filterAccountId != null && tx.accountId != _filterAccountId) return false;
+      if (_filterAccountId != null && tx.accountId.toString() != _filterAccountId.toString()) return false;
 
       // 3. Category filter
       if (_filterCategory != null && _filterCategory!.isNotEmpty && tx.category != _filterCategory) return false;
@@ -109,21 +137,14 @@ class _TransactionScreenState extends State<TransactionScreen> {
       // 4. Date range filter
       if (_filterDateRange != null) {
         try {
-          final parts = tx.transactionTime.split(' ');
-          if (parts.isNotEmpty) {
-            final dateParts = parts[0].split('/');
-            if (dateParts.length == 3) {
-              final day = int.parse(dateParts[0]);
-              final month = int.parse(dateParts[1]);
-              final year = int.parse(dateParts[2]);
-              final txDate = DateTime(year, month, day);
-              
-              final startDate = DateTime(_filterDateRange!.start.year, _filterDateRange!.start.month, _filterDateRange!.start.day);
-              final endDate = DateTime(_filterDateRange!.end.year, _filterDateRange!.end.month, _filterDateRange!.end.day);
+          final dt = _parseDateTime(tx.transactionTime);
+          if (dt != null) {
+            final txDate = DateTime(dt.year, dt.month, dt.day);
+            final startDate = DateTime(_filterDateRange!.start.year, _filterDateRange!.start.month, _filterDateRange!.start.day);
+            final endDate = DateTime(_filterDateRange!.end.year, _filterDateRange!.end.month, _filterDateRange!.end.day);
 
-              if (txDate.isBefore(startDate) || txDate.isAfter(endDate)) {
-                return false;
-              }
+            if (txDate.isBefore(startDate) || txDate.isAfter(endDate)) {
+              return false;
             }
           }
         } catch (_) {}
@@ -147,6 +168,18 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
       return true;
     }).toList();
+
+    // Sort from closest to furthest (newest first / từ gần đến xa)
+    list.sort((a, b) {
+      DateTime? dtA = _parseDateTime(a.transactionTime);
+      DateTime? dtB = _parseDateTime(b.transactionTime);
+      if (dtA != null && dtB != null) {
+        return dtB.compareTo(dtA);
+      }
+      return 0;
+    });
+
+    return list;
   }
 
   void _resetFilters() {
@@ -177,10 +210,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
   }
 
   void _showAddManualTransactionDialog() async {
-    final accounts = await DatabaseHelper.instance.getAccounts();
+    final accounts = await ApiService.getAccounts();
     if (accounts.isEmpty) {
       final currentTime = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
-      await DatabaseHelper.instance.insertAccount(
+      await ApiService.insertAccount(
         Account(
           bankName: 'Tiền mặt',
           accountName: 'Ví tiền mặt',
@@ -190,10 +223,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
         ),
       );
     }
-    final refreshedAccounts = await DatabaseHelper.instance.getAccounts();
-    final categories = await DatabaseHelper.instance.getCategories();
+    final refreshedAccounts = await ApiService.getAccounts();
+    final categories = await ApiService.getCategories();
 
-    int? selectedAccountId = refreshedAccounts.isNotEmpty ? refreshedAccounts.first.id : null;
+    dynamic selectedAccountId = refreshedAccounts.isNotEmpty ? refreshedAccounts.first.id : null;
     String selectedType = 'EXPENSE';
     String selectedCategory = categories.isNotEmpty ? categories.first.name : 'Khác';
     final amountController = TextEditingController();
@@ -244,11 +277,11 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       decoration: const InputDecoration(labelText: 'Số tiền (VNĐ)*'),
                     ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
+                    DropdownButtonFormField<dynamic>(
                       value: selectedAccountId,
                       decoration: const InputDecoration(labelText: 'Tài khoản / Ví*'),
                       items: refreshedAccounts.map((acc) {
-                        return DropdownMenuItem<int>(
+                        return DropdownMenuItem<dynamic>(
                           value: acc.id,
                           child: Text('${acc.bankName} (${acc.accountNumber})'),
                         );
@@ -301,7 +334,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                         source: 'manual',
                         category: selectedCategory,
                       );
-                      await DatabaseHelper.instance.insertTransaction(tx);
+                      await ApiService.insertTransaction(tx);
                       if (context.mounted) {
                         Navigator.pop(context);
                       }
@@ -350,7 +383,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     for (var id in _selectedIds) {
-                      await DatabaseHelper.instance.updateTransactionCategory(id, selectedCategory);
+                      await ApiService.updateTransactionCategory(id, selectedCategory);
                     }
                     if (context.mounted) {
                       Navigator.pop(context);
@@ -391,7 +424,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
     if (confirm) {
       for (var id in _selectedIds) {
-        await DatabaseHelper.instance.deleteTransaction(id);
+        await ApiService.deleteTransaction(id);
       }
       if (mounted) {
         setState(() {
@@ -639,7 +672,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                   false;
 
                               if (confirm) {
-                                await DatabaseHelper.instance.deleteTransaction(tx.id!);
+                                await ApiService.deleteTransaction(tx.id!);
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                   _loadData();
@@ -708,7 +741,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             onPressed: () async {
-                              await DatabaseHelper.instance.updateTransactionCategory(tx.id!, selectedCategory);
+                              await ApiService.updateTransactionCategory(tx.id!, selectedCategory);
                               if (context.mounted) {
                                 Navigator.pop(context);
                                 _loadData();
@@ -751,9 +784,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
     for (var tx in filteredList) {
       String dateKey = 'Chưa xác định';
       try {
-        final parts = tx.transactionTime.split(' ');
-        if (parts.isNotEmpty) {
-          dateKey = 'Ngày ${parts[0]}';
+        final dt = _parseDateTime(tx.transactionTime);
+        if (dt != null) {
+          dateKey = 'Tháng ${dt.month}/${dt.year}';
         }
       } catch (_) {}
 
@@ -764,6 +797,21 @@ class _TransactionScreenState extends State<TransactionScreen> {
     }
 
     final sortedDateKeys = groupedTransactions.keys.toList();
+    sortedDateKeys.sort((a, b) {
+      try {
+        final partsA = a.replaceFirst('Tháng ', '').split('/');
+        final partsB = b.replaceFirst('Tháng ', '').split('/');
+        if (partsA.length == 2 && partsB.length == 2) {
+          int mA = int.parse(partsA[0]);
+          int yA = int.parse(partsA[1]);
+          int mB = int.parse(partsB[0]);
+          int yB = int.parse(partsB[1]);
+          if (yA != yB) return yB.compareTo(yA);
+          return mB.compareTo(mA);
+        }
+      } catch (_) {}
+      return b.compareTo(a);
+    });
 
     List<Widget> activeFilterChips = [];
     if (_filterType == 'INCOME') {
@@ -1001,7 +1049,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                                         ),
                                                         const SizedBox(height: 2),
                                                         Text(
-                                                          '$timeOnly · ${tx.category ?? 'Khác'}',
+                                                          '${tx.transactionTime} · ${tx.category ?? 'Khác'}',
                                                           style: TextStyle(color: Colors.teal, fontSize: 11),
                                                         ),
                                                       ],

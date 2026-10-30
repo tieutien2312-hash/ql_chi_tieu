@@ -5,6 +5,8 @@ import 'statistics_screen.dart';
 import 'wallet_screen.dart';
 import 'settings_screen.dart';
 import 'category_management_screen.dart';
+import 'admin_dashboard_screen.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class MainScreen extends StatefulWidget {
@@ -16,13 +18,14 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+  bool _isAdminChecking = true;
 
   final List<String> _titles = [
     'Trang chủ',
     'Lịch sử giao dịch',
     'Thống kê tài chính',
     'Ví tiền & Tài khoản',
-    'Cài đặt & Quyền',
+    'Trang cá nhân',
   ];
 
   late final List<Widget> _screens;
@@ -30,6 +33,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
+    _checkAdminAccess();
     _screens = [
       HomeScreen(onRefreshNeeded: () => setState(() {})),
       const TransactionScreen(),
@@ -39,8 +43,28 @@ class _MainScreenState extends State<MainScreen> {
     ];
   }
 
+  Future<void> _checkAdminAccess() async {
+    String role = await ApiService.getUserRole();
+    if (role.toLowerCase() == 'admin' || role == '1') {
+      if (!mounted) return;
+      // Admin is strictly forbidden from accessing user features! Redirect to AdminDashboardScreen.
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+      );
+      return;
+    }
+    setState(() => _isAdminChecking = false);
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isAdminChecking) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primaryCyan)),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_currentIndex]),
@@ -108,9 +132,9 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Ví tiền',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
-            label: 'Cài đặt',
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Cá nhân',
           ),
         ],
       ),

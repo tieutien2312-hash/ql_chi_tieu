@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'screens/main_screen.dart';
+import 'screens/login_screen.dart';
+import 'theme/app_theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
@@ -14,11 +15,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Quản lý chi tiêu',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
-      home: const MainScreen(),
+      theme: AppTheme.lightTheme,
+      home: const LoginScreen(),
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/account.dart';
-import '../services/database_helper.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class WalletScreen extends StatefulWidget {
@@ -24,7 +24,7 @@ class _WalletScreenState extends State<WalletScreen> {
 
   Future<void> _loadAccounts() async {
     setState(() => _isLoading = true);
-    final accounts = await DatabaseHelper.instance.getAccounts();
+    final accounts = await ApiService.getAccounts();
     setState(() {
       _accounts = accounts;
       _isLoading = false;
@@ -96,7 +96,8 @@ class _WalletScreenState extends State<WalletScreen> {
                     balance: balance,
                     createdAt: currentTime,
                   );
-                  await DatabaseHelper.instance.insertAccount(newAcc);
+                  await ApiService.insertAccount(newAcc);
+                  if (!context.mounted) return;
                   Navigator.pop(context);
                   _loadAccounts();
                 }
@@ -109,7 +110,7 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  void _deleteAccount(int id) async {
+  void _deleteAccount(dynamic id) async {
     bool confirm = await showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -124,7 +125,12 @@ class _WalletScreenState extends State<WalletScreen> {
         false;
 
     if (confirm) {
-      await DatabaseHelper.instance.deleteAccount(id);
+      if (id is int) {
+        await ApiService.deleteAccount(id);
+      } else {
+        // if id is guid string or dynamic
+        await ApiService.deleteAccount(int.tryParse(id.toString()) ?? 0);
+      }
       _loadAccounts();
     }
   }
@@ -145,7 +151,7 @@ class _WalletScreenState extends State<WalletScreen> {
                         children: [
                           Icon(Icons.account_balance_wallet_outlined, size: 64, color: Colors.grey.shade400),
                           const SizedBox(height: 12),
-                          const Text('Chưa có tài khoản nào được lưu.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)),
+                          const Text('Chưa có tài khoản nào được lưu từ API.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryCyan, foregroundColor: Colors.white),
@@ -205,7 +211,7 @@ class _WalletScreenState extends State<WalletScreen> {
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.delete_outline, color: AppTheme.errorRed),
-                                  onPressed: () => _deleteAccount(acc.id!),
+                                  onPressed: () => _deleteAccount(acc.id),
                                 ),
                               ],
                             ),

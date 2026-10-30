@@ -1,6 +1,8 @@
+import 'package:intl/intl.dart';
+
 class TransactionModel {
-  final int? id;
-  final int accountId;
+  final dynamic id;
+  final dynamic accountId;
   final String type; // 'INCOME' or 'EXPENSE'
   final double amount;
   final double balanceAfter;
@@ -36,16 +38,25 @@ class TransactionModel {
   }
 
   factory TransactionModel.fromMap(Map<String, dynamic> map) {
+    String rawTime = map['transactionTime'] ?? map['TransactionTime'] ?? '';
+    String formattedTime = rawTime;
+    try {
+      if (rawTime.contains('T') || (rawTime.contains('-') && !rawTime.contains('/'))) {
+        final dt = DateTime.parse(rawTime).toLocal();
+        formattedTime = DateFormat('dd/MM/yyyy HH:mm').format(dt);
+      }
+    } catch (_) {}
+
     return TransactionModel(
-      id: map['id'],
-      accountId: map['accountId'] ?? 0,
-      type: map['type'] ?? 'EXPENSE',
-      amount: (map['amount'] ?? 0.0).toDouble(),
-      balanceAfter: (map['balanceAfter'] ?? 0.0).toDouble(),
-      description: map['description'] ?? '',
-      transactionTime: map['transactionTime'] ?? '',
-      source: map['source'] ?? 'manual',
-      category: map['category'] ?? 'Khác',
+      id: map['id'] ?? map['Id'],
+      accountId: map['accountId'] ?? map['AccountId'] ?? map['account_id'] ?? 0,
+      type: map['type'] ?? map['Type'] ?? 'EXPENSE',
+      amount: (map['amount'] ?? map['Amount'] ?? 0.0).toDouble(),
+      balanceAfter: (map['balanceAfter'] ?? map['BalanceAfter'] ?? 0.0).toDouble(),
+      description: map['description'] ?? map['Description'] ?? '',
+      transactionTime: formattedTime,
+      source: map['source'] ?? map['Source'] ?? 'manual',
+      category: map['category'] ?? map['Category'] ?? map['categoryName'] ?? map['CategoryName'] ?? 'Khác',
     );
   }
 }

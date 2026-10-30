@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/account.dart';
 import '../models/transaction_model.dart';
-import '../services/database_helper.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -32,23 +32,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final summary = await DatabaseHelper.instance.getSummaryTotals();
-    final accounts = await DatabaseHelper.instance.getAccounts();
-    final transactions = await DatabaseHelper.instance.getTransactions();
+    final accounts = await ApiService.getAccounts();
+    final transactions = await ApiService.getTransactions();
+
+    double totalBalance = 0.0;
+    for (var acc in accounts) {
+      totalBalance += acc.balance;
+    }
+
+    double totalIncome = 0.0;
+    double totalExpense = 0.0;
+    for (var tx in transactions) {
+      if (tx.type == 'INCOME') {
+        totalIncome += tx.amount;
+      } else if (tx.type == 'EXPENSE') {
+        totalExpense += tx.amount;
+      }
+    }
 
     setState(() {
-      _totalBalance = summary['totalBalance'] ?? 0.0;
-      _totalIncome = summary['totalIncome'] ?? 0.0;
-      _totalExpense = summary['totalExpense'] ?? 0.0;
+      _totalBalance = totalBalance;
+      _totalIncome = totalIncome;
+      _totalExpense = totalExpense;
       _accounts = accounts;
       _recentTransactions = transactions.take(10).toList();
       _isLoading = false;
     });
   }
 
-  Account? _getAccountForTx(int accountId) {
+  Account? _getAccountForTx(dynamic accountId) {
     try {
-      return _accounts.firstWhere((acc) => acc.id == accountId);
+      return _accounts.firstWhere((acc) => acc.id.toString() == accountId.toString());
     } catch (_) {
       return null;
     }
@@ -86,21 +100,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppTheme.surfaceWhite,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppTheme.borderLight),
                   ),
-                  child: Text(
-                    DateFormat('dd/MM/yyyy').format(DateTime.now()),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today, size: 14, color: AppTheme.primaryCyan),
+                      const SizedBox(width: 6),
+                      Text(
+                        DateFormat('dd/MM/yyyy').format(DateTime.now()),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
-            // Total Balance Card with Cyan gradient accent
+            // Total Balance Card
             Container(
-              width: double.infinity,
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
@@ -112,42 +131,61 @@ class _HomeScreenState extends State<HomeScreen> {
                 boxShadow: [
                   BoxShadow(
                     color: AppTheme.primaryCyan.withOpacity(0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Tổng số dư các tài khoản',
-                    style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
-                  ),
+                  const Text('Tổng số dư tài khoản', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
-                  Text(
-                    '${_currencyFormat.format(_totalBalance)} VNĐ',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${_currencyFormat.format(_totalBalance)} VNĐ',
+                      style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildSummaryItem(
-                        'Thu nhập',
-                        '+ ${_currencyFormat.format(_totalIncome)} VNĐ',
-                        Colors.greenAccent,
-                        Icons.arrow_downward,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                            child: const Icon(Icons.arrow_downward, color: Colors.greenAccent, size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Thu nhập', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text('+${_currencyFormat.format(_totalIncome)} đ', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ],
                       ),
-                      _buildSummaryItem(
-                        'Chi tiêu',
-                        '- ${_currencyFormat.format(_totalExpense)} VNĐ',
-                        Colors.white,
-                        Icons.arrow_upward,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                            child: const Icon(Icons.arrow_upward, color: Colors.white, size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Chi tiêu', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text('−${_currencyFormat.format(_totalExpense)} đ', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -160,223 +198,129 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Tài khoản & Ví',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-                ),
+                const Text('Ví & Tài khoản ngân hàng', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
                 TextButton(
-                  onPressed: () {
-                    widget.onRefreshNeeded();
-                  },
-                  style: TextButton.styleFrom(foregroundColor: AppTheme.primaryCyan),
-                  child: const Text('Xem tất cả'),
+                  onPressed: () {},
+                  child: const Text('Xem tất cả', style: TextStyle(color: AppTheme.primaryCyanDark)),
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
             // Accounts Horizontal List
-            _accounts.isEmpty
-                ? Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline, color: AppTheme.primaryCyan),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Chưa có tài khoản nào. Hãy bật quyền đọc thông báo để tự động tạo!',
-                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                            ),
-                          ),
-                        ],
+            _isLoading
+                ? const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: AppTheme.primaryCyan)))
+                : _accounts.isEmpty
+                    ? const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: Center(child: Text('Chưa có tài khoản nào. Hãy thêm ví hoặc tài khoản.', style: TextStyle(color: AppTheme.textSecondary))),
+                        ),
+                      )
+                    : SizedBox(
+                        height: 110,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _accounts.length,
+                          itemBuilder: (context, index) {
+                            final acc = _accounts[index];
+                            return Container(
+                              width: 200,
+                              margin: const EdgeInsets.only(right: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceWhite,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: AppTheme.borderLight),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 3)),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(acc.bankName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textPrimary), overflow: TextOverflow.ellipsis),
+                                      const Icon(Icons.account_balance, color: AppTheme.primaryCyan, size: 18),
+                                    ],
+                                  ),
+                                  Text(_maskAccountNumber(acc.accountNumber), style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                                  Text(
+                                    '${_currencyFormat.format(acc.balance)} đ',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primaryCyanDark),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  )
-                : SizedBox(
-                    height: 115,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _accounts.length,
-                      itemBuilder: (context, index) {
-                        final acc = _accounts[index];
-                        return Container(
-                          width: 165,
-                          margin: const EdgeInsets.only(right: 12),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: AppTheme.surfaceWhite,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppTheme.borderLight),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.02),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                acc.bankName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _maskAccountNumber(acc.accountNumber),
-                                style: const TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                '${_currencyFormat.format(acc.balance)} đ',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: AppTheme.primaryCyanDark,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
             const SizedBox(height: 24),
 
-            // Recent Transactions Header
-            const Text(
-              'Giao dịch gần đây',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-            ),
+            // Recent Transactions Section
+            const Text('Giao dịch gần đây', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
             const SizedBox(height: 12),
 
-            // Transactions List styled identical to TransactionScreen
-            _recentTransactions.isEmpty
-                ? const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32.0),
-                      child: Text(
-                        'Chưa có giao dịch nào.\nỨng dụng sẽ tự động ghi nhận khi có thông báo biến động số dư từ ngân hàng.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppTheme.textSecondary),
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _recentTransactions.length,
-                    itemBuilder: (context, index) {
-                      final tx = _recentTransactions[index];
-                      final isIncome = tx.type == 'INCOME';
-                      final acc = _getAccountForTx(tx.accountId);
-                      final bankName = acc?.bankName ?? 'Chưa xác định';
-                      final accNum = acc != null ? _maskAccountNumber(acc.accountNumber) : '••••';
-
-                      String timeOnly = tx.transactionTime;
-                      try {
-                        final p = tx.transactionTime.split(' ');
-                        if (p.length > 1) timeOnly = p[1];
-                      } catch (_) {}
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        elevation: 1,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: const BorderSide(color: AppTheme.borderLight),
-                        ),
+            _isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryCyan))
+                : _recentTransactions.isEmpty
+                    ? const Card(
                         child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
+                          padding: EdgeInsets.all(24.0),
+                          child: Center(
+                            child: Text('Chưa có giao dịch nào được ghi nhận từ API.', style: TextStyle(color: AppTheme.textSecondary)),
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _recentTransactions.length,
+                        itemBuilder: (context, index) {
+                          final tx = _recentTransactions[index];
+                          final isIncome = tx.type == 'INCOME';
+                          final acc = _getAccountForTx(tx.accountId);
+                          String timeOnly = tx.transactionTime;
+                          try {
+                            final p = tx.transactionTime.split(' ');
+                            if (p.isNotEmpty) timeOnly = p[0];
+                          } catch (_) {}
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            elevation: 1,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppTheme.borderLight)),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              leading: CircleAvatar(
                                 backgroundColor: isIncome ? Colors.green.shade50 : Colors.red.shade50,
                                 child: Icon(
                                   isIncome ? Icons.arrow_downward : Icons.arrow_upward,
                                   color: isIncome ? AppTheme.successGreen : AppTheme.errorRed,
+                                  size: 20,
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      tx.description,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: AppTheme.textPrimary),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      '$bankName · $accNum',
-                                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '$timeOnly · ${tx.category ?? 'Khác'}',
-                                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${isIncome ? '+' : '−'} ${_currencyFormat.format(tx.amount)} VNĐ',
+                              title: Text(tx.description, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              subtitle: Text('${tx.transactionTime} · ${tx.category ?? 'Khác'} ${acc != null ? '(${acc.bankName})' : ''}', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                              trailing: Text(
+                                '${isIncome ? '+' : '−'}${_currencyFormat.format(tx.amount)} đ',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
                                   color: isIncome ? AppTheme.successGreen : AppTheme.errorRed,
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                            ),
+                          );
+                        },
+                      ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSummaryItem(String title, String amount, Color color, IconData icon) {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: Colors.white.withOpacity(0.2),
-          child: Icon(icon, color: color, size: 18),
-        ),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-            Text(
-              amount,
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

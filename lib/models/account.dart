@@ -1,5 +1,5 @@
 class Account {
-  final int? id;
+  final dynamic id;
   final String bankName;
   final String accountName;
   final String accountNumber;
@@ -28,17 +28,17 @@ class Account {
 
   factory Account.fromMap(Map<String, dynamic> map) {
     return Account(
-      id: map['id'],
-      bankName: map['bankName'] ?? '',
-      accountName: map['accountName'] ?? '',
-      accountNumber: map['accountNumber'] ?? '',
-      balance: (map['balance'] ?? 0.0).toDouble(),
-      createdAt: map['createdAt'] ?? '',
+      id: map['id'] ?? map['Id'],
+      bankName: map['bankName'] ?? map['BankName'] ?? '',
+      accountName: map['accountName'] ?? map['AccountName'] ?? '',
+      accountNumber: map['accountNumber'] ?? map['AccountNumber'] ?? '',
+      balance: (map['balance'] ?? map['Balance'] ?? 0.0).toDouble(),
+      createdAt: map['createdAt'] ?? map['CreatedAt'] ?? '',
     );
   }
 
   Account copyWith({
-    int? id,
+    dynamic id,
     String? bankName,
     String? accountName,
     String? accountNumber,
