@@ -8,7 +8,9 @@ import '../theme/app_theme.dart';
 import 'bill_scan_screen.dart';
 
 class TransactionScreen extends StatefulWidget {
-  const TransactionScreen({super.key});
+  final dynamic initialAccountId;
+
+  const TransactionScreen({super.key, this.initialAccountId});
 
   @override
   State<TransactionScreen> createState() => _TransactionScreenState();
@@ -38,6 +40,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
   @override
   void initState() {
     super.initState();
+    _filterAccountId = widget.initialAccountId;
     _loadData();
     _searchController.addListener(() {
       setState(() {
@@ -97,16 +100,24 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   DateTime? _parseDateTime(String rawTime) {
     try {
-      if (rawTime.contains('T') || (rawTime.contains('-') && !rawTime.contains('/'))) {
-        return DateTime.parse(rawTime);
+      final trimmed = rawTime.trim();
+      if (trimmed.contains('T') || (trimmed.contains('-') && !trimmed.contains('/'))) {
+        return DateTime.parse(trimmed);
       }
-      final parts = rawTime.split(' ');
+      final parts = trimmed.split(' ');
       if (parts.isNotEmpty) {
         final dParts = parts[0].split('/');
         if (dParts.length == 3) {
-          int day = int.parse(dParts[0]);
-          int month = int.parse(dParts[1]);
-          int year = int.parse(dParts[2]);
+          int day, month, year;
+          if (dParts[0].length == 4) {
+            year = int.parse(dParts[0]);
+            month = int.parse(dParts[1]);
+            day = int.parse(dParts[2]);
+          } else {
+            day = int.parse(dParts[0]);
+            month = int.parse(dParts[1]);
+            year = int.parse(dParts[2]);
+          }
           int hour = 0;
           int minute = 0;
           if (parts.length > 1) {
@@ -126,29 +137,31 @@ class _TransactionScreenState extends State<TransactionScreen> {
   List<TransactionModel> get _filteredTransactions {
     final list = _allTransactions.where((tx) {
       // 1. Type filter
-      if (_filterType == 'INCOME' && tx.type != 'INCOME') return false;
-      if (_filterType == 'EXPENSE' && tx.type != 'EXPENSE') return false;
+      if (_filterType == 'INCOME' && tx.type.toUpperCase() != 'INCOME') return false;
+      if (_filterType == 'EXPENSE' && tx.type.toUpperCase() != 'EXPENSE') return false;
 
       // 2. Account filter
       if (_filterAccountId != null && tx.accountId.toString() != _filterAccountId.toString()) return false;
 
       // 3. Category filter
-      if (_filterCategory != null && _filterCategory!.isNotEmpty && tx.category != _filterCategory) return false;
+      if (_filterCategory != null && _filterCategory!.trim().isNotEmpty) {
+        final txCat = (tx.category ?? '').trim().toLowerCase();
+        final filterCat = _filterCategory!.trim().toLowerCase();
+        if (txCat != filterCat) return false;
+      }
 
       // 4. Date range filter
       if (_filterDateRange != null) {
-        try {
-          final dt = _parseDateTime(tx.transactionTime);
-          if (dt != null) {
-            final txDate = DateTime(dt.year, dt.month, dt.day);
-            final startDate = DateTime(_filterDateRange!.start.year, _filterDateRange!.start.month, _filterDateRange!.start.day);
-            final endDate = DateTime(_filterDateRange!.end.year, _filterDateRange!.end.month, _filterDateRange!.end.day);
+        final dt = _parseDateTime(tx.transactionTime);
+        if (dt != null) {
+          final txDate = DateTime(dt.year, dt.month, dt.day);
+          final startDate = DateTime(_filterDateRange!.start.year, _filterDateRange!.start.month, _filterDateRange!.start.day);
+          final endDate = DateTime(_filterDateRange!.end.year, _filterDateRange!.end.month, _filterDateRange!.end.day);
 
-            if (txDate.isBefore(startDate) || txDate.isAfter(endDate)) {
-              return false;
-            }
+          if (txDate.isBefore(startDate) || txDate.isAfter(endDate)) {
+            return false;
           }
-        } catch (_) {}
+        }
       }
 
       // 5. Search query (description, bank name, account number, category)
@@ -488,7 +501,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   void _showAdvancedFilterModal() {
     String tempType = _filterType;
-    int? tempAccountId = _filterAccountId;
+    dynamic tempAccountId = _filterAccountId;
     String? tempCategory = _filterCategory;
     DateTimeRange? tempDateRange = _filterDateRange;
 
@@ -502,6 +515,23 @@ class _TransactionScreenState extends State<TransactionScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            // Lọc danh mục trùng lặp và không rỗng
+            final uniqueCategoryNames = <String>[];
+            for (var cat in _categories) {
+              final name = cat.name.trim();
+              if (name.isNotEmpty && !uniqueCategoryNames.contains(name)) {
+                uniqueCategoryNames.add(name);
+              }
+            }
+
+            final selectedAccValue = _accounts.any((acc) => acc.id.toString() == tempAccountId?.toString())
+                ? _accounts.firstWhere((acc) => acc.id.toString() == tempAccountId?.toString()).id
+                : null;
+
+            final selectedCatValue = (tempCategory != null && uniqueCategoryNames.any((c) => c.toLowerCase() == tempCategory!.trim().toLowerCase()))
+                ? uniqueCategoryNames.firstWhere((c) => c.toLowerCase() == tempCategory!.trim().toLowerCase())
+                : null;
+
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -565,17 +595,22 @@ class _TransactionScreenState extends State<TransactionScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            const Text('Tài khoản / Ngân hàng', style: TextStyle(fontWeight: FontWeight.w600)),
+                            const Text('Ví / Tài khoản ngân hàng', style: TextStyle(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 8),
-                            DropdownButtonFormField<int?>(
-                              value: tempAccountId,
+                            DropdownButtonFormField<dynamic>(
+                              value: selectedAccValue,
                               decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                               items: [
-                                const DropdownMenuItem<int?>(value: null, child: Text('Tất cả tài khoản')),
-                                ..._accounts.map((acc) => DropdownMenuItem<int?>(
-                                      value: acc.id,
-                                      child: Text('${acc.bankName} (${_maskAccountNumber(acc.accountNumber)})'),
-                                    )),
+                                const DropdownMenuItem<dynamic>(value: null, child: Text('Tất cả ví / tài khoản')),
+                                ..._accounts.map((acc) {
+                                  final displayName = acc.accountName.isNotEmpty
+                                      ? '${acc.accountName} (${acc.bankName})'
+                                      : '${acc.bankName} (${_maskAccountNumber(acc.accountNumber)})';
+                                  return DropdownMenuItem<dynamic>(
+                                    value: acc.id,
+                                    child: Text(displayName, overflow: TextOverflow.ellipsis),
+                                  );
+                                }),
                               ],
                               onChanged: (val) => setModalState(() => tempAccountId = val),
                             ),
@@ -583,13 +618,13 @@ class _TransactionScreenState extends State<TransactionScreen> {
                             const Text('Danh mục', style: TextStyle(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String?>(
-                              value: tempCategory,
+                              value: selectedCatValue,
                               decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                               items: [
                                 const DropdownMenuItem<String?>(value: null, child: Text('Tất cả danh mục')),
-                                ..._categories.map((cat) => DropdownMenuItem<String?>(
-                                      value: cat.name,
-                                      child: Text(cat.name),
+                                ...uniqueCategoryNames.map((catName) => DropdownMenuItem<String?>(
+                                      value: catName,
+                                      child: Text(catName),
                                     )),
                               ],
                               onChanged: (val) => setModalState(() => tempCategory = val),
@@ -867,9 +902,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
       activeFilterChips.add(_buildFilterChip('Chi tiêu', () => setState(() => _filterType = 'ALL')));
     }
     if (_filterAccountId != null) {
-      final acc = _getAccountForTx(_filterAccountId!);
+      final acc = _getAccountForTx(_filterAccountId);
       if (acc != null) {
-        activeFilterChips.add(_buildFilterChip('${acc.bankName}', () => setState(() => _filterAccountId = null)));
+        final label = acc.accountName.isNotEmpty ? acc.accountName : acc.bankName;
+        activeFilterChips.add(_buildFilterChip('Ví: $label', () => setState(() => _filterAccountId = null)));
       }
     }
     if (_filterCategory != null && _filterCategory!.isNotEmpty) {

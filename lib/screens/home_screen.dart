@@ -44,14 +44,29 @@ class _HomeScreenState extends State<HomeScreen> {
     
     // Lọc và tính toán trên một luồng riêng nếu cần thiết, 
     // nhưng trước hết tối ưu hóa vòng lặp
-    final filtered = transactions.where((tx) {
+    DateTime? parseDate(String raw) {
       try {
-        final p = tx.transactionTime.split(' ')[0].split('/');
-        final txDate = DateTime(int.parse(p[2]), int.parse(p[1]), int.parse(p[0]));
+        final trimmed = raw.trim();
+        if (trimmed.contains('T') || (trimmed.contains('-') && !trimmed.contains('/'))) {
+          return DateTime.parse(trimmed);
+        }
+        final parts = trimmed.split(' ')[0].split('/');
+        if (parts.length == 3) {
+          if (parts[0].length == 4) {
+            return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+          }
+          return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    final filtered = transactions.where((tx) {
+      final txDate = parseDate(tx.transactionTime);
+      if (txDate != null) {
         return txDate.month == _selectedDate.month && txDate.year == _selectedDate.year;
-      } catch (_) {
-        return false;
       }
+      return false;
     }).toList();
 
     double totalIncome = 0.0;

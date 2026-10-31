@@ -62,7 +62,27 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await AuthService.signInWithGoogle(context);
+      String? role = await AuthService.signInWithGoogle(context);
+      if (role != null) {
+        if (!mounted) return;
+        if (role.toLowerCase() == 'admin' || role == '1') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Đã hủy thao tác đăng nhập Google.';
+          });
+        }
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
