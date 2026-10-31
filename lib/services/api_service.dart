@@ -661,4 +661,32 @@ class ApiService {
     }
     return [];
   }
+
+  static Future<http.Response?> loginWithGoogle(String idToken) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/google'), // Điều chỉnh lại endpoint tùy thuộc vào API của backend ASP.NET Core bạn viết
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'idToken': idToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final token = data['token'] ?? data['accessToken'] ?? data['jwt'];
+        final user = data['user'];
+        if (token != null) {
+          await saveToken(token);
+          if (user != null) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_role', user['role']?.toString() ?? 'User');
+            await prefs.setString('user_email', user['email'] ?? '');
+          }
+        }
+      }
+      return response;
+    } catch (e) {
+      print('Login with Google error: $e');
+    }
+    return null;
+  }
 }

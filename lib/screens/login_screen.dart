@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import 'main_screen.dart';
 import 'admin_dashboard_screen.dart';
@@ -53,6 +54,29 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // ===== BỔ SUNG GOOGLE SIGN-IN: Hàm xử lý Đăng nhập Google =====
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await AuthService.signInWithGoogle(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Đăng nhập Google thất bại: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+  // ==============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -105,6 +129,40 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text('Đăng nhập'),
                   ),
+                  // ===== BỔ SUNG GOOGLE SIGN-IN BUTTON (BẮT ĐẦU) =====
+                  const SizedBox(height: 20),
+                  Row(
+                    children: const [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'HOẶC',
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      side: const BorderSide(color: AppTheme.borderLight),
+                    ),
+                    onPressed: _isLoading ? null : _handleGoogleLogin,
+                    icon: Image.network(
+                      'https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg',
+                      height: 20,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.g_mobiledata, size: 24),
+                    ),
+                    label: const Text(
+                      'Đăng nhập bằng Google',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                    ),
+                  ),
+                  // ===== BỔ SUNG GOOGLE SIGN-IN BUTTON (KẾT THÚC) =====
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: () {
