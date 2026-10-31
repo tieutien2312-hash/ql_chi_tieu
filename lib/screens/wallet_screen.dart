@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/account.dart';
+import '../models/transaction_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import 'wallet_detail_screen.dart';
@@ -14,6 +15,7 @@ class WalletScreen extends StatefulWidget {
 
 class _WalletScreenState extends State<WalletScreen> {
   List<Account> _accounts = [];
+  List<TransactionModel> _allTransactions = [];
   bool _isLoading = true;
   final NumberFormat _currencyFormat = NumberFormat('#,###', 'vi_VN');
 
@@ -26,8 +28,10 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> _loadAccounts() async {
     setState(() => _isLoading = true);
     final accounts = await ApiService.getAccounts();
+    final txs = await ApiService.getTransactions();
     setState(() {
       _accounts = accounts;
+      _allTransactions = txs;
       _isLoading = false;
     });
   }
@@ -110,6 +114,79 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
+  void _showEditAccountDialog(Account account) {
+    final bankController = TextEditingController(text: account.bankName);
+    final nameController = TextEditingController(text: account.accountName);
+    final numberController = TextEditingController(text: account.accountNumber);
+    final balanceController = TextEditingController(text: account.balance.toStringAsFixed(0));
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Chỉnh sửa tài khoản / Ví'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: bankController,
+                  decoration: const InputDecoration(labelText: 'Tên Ngân hàng / Ví'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Tên gợi nhớ'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: numberController,
+                  decoration: const InputDecoration(labelText: 'Số tài khoản / Số điện thoại'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: balanceController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Số dư (VNĐ)'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy', style: TextStyle(color: AppTheme.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryCyan, foregroundColor: Colors.white),
+              onPressed: () async {
+                final bank = bankController.text.trim();
+                final name = nameController.text.trim();
+                final number = numberController.text.trim();
+                final balance = double.tryParse(balanceController.text.trim()) ?? account.balance;
+
+                if (bank.isNotEmpty && number.isNotEmpty) {
+                  final updatedAcc = Account(
+                    id: account.id,
+                    bankName: bank,
+                    accountName: name.isEmpty ? bank : name,
+                    accountNumber: number,
+                    balance: balance,
+                    createdAt: account.createdAt,
+                  );
+                  await ApiService.updateAccount(updatedAcc);
+                  if (context.mounted) Navigator.pop(context);
+                  _loadAccounts();
+                }
+              },
+              child: const Text('Lưu'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _deleteAccount(dynamic id) async {
     bool confirm = await showDialog(
           context: context,
@@ -162,6 +239,8 @@ class _WalletScreenState extends State<WalletScreen> {
                       itemCount: _accounts.length,
                       itemBuilder: (context, index) {
                         final acc = _accounts[index];
+                        bool isNotifAccount = _allTransactions.any((tx) => tx.accountId.toString() == acc.id.toString() && tx.source == 'notification');
+
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
                           elevation: 1,
@@ -193,9 +272,25 @@ class _WalletScreenState extends State<WalletScreen> {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(
-                                          acc.bankName,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              acc.bankName,
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary),
+                                            ),
+                                            if (isNotifAccount) ...[
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue.shade50,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.blue.shade200),
+                                                ),
+                                                child: const Text('Tự động', style: TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold)),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
@@ -214,9 +309,21 @@ class _WalletScreenState extends State<WalletScreen> {
                                       ],
                                     ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppTheme.errorRed),
-                                    onPressed: () => _deleteAccount(acc.id!),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (!isNotifAccount)
+                                        IconButton(
+                                          icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryCyanDark),
+                                          onPressed: () => _showEditAccountDialog(acc),
+                                          tooltip: 'Sửa tài khoản',
+                                        ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: AppTheme.errorRed),
+                                        onPressed: () => _deleteAccount(acc.id!),
+                                        tooltip: 'Xóa tài khoản',
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),

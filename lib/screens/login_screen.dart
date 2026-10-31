@@ -34,13 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (role != null) {
       if (!mounted) return;
       if (role.toLowerCase() == 'admin' || role == '1') {
-        // Navigate strictly to Admin Dashboard
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
         );
       } else {
-        // Navigate to User Main Screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -49,6 +47,36 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       setState(() {
         _errorMessage = 'Đăng nhập thất bại. Kiểm tra lại email, mật khẩu hoặc quyền hạn.';
+      });
+    }
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    String? role = await ApiService.loginWithGoogle();
+
+    setState(() => _isLoading = false);
+
+    if (role != null) {
+      if (!mounted) return;
+      if (role.toLowerCase() == 'admin' || role == '1') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
+    } else {
+      setState(() {
+        _errorMessage = 'Đăng nhập Google thất bại hoặc đã bị hủy.';
       });
     }
   }
@@ -110,6 +138,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: _isLoading
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                         : const Text('Đăng nhập'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      side: const BorderSide(color: AppTheme.borderLight),
+                    ),
+                    onPressed: _isLoading ? null : _handleGoogleLogin,
+                    icon: const Icon(Icons.g_mobiledata, size: 28, color: Colors.red),
+                    label: const Text('Đăng nhập với Google', style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
                   ),
                   const SizedBox(height: 16),
                   TextButton(

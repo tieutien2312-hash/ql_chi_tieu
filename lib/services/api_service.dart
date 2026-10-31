@@ -1,9 +1,13 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/account.dart';
 import '../models/transaction_model.dart';
 import '../models/category.dart';
+import '../main.dart';
+import '../screens/login_screen.dart';
 import 'database_helper.dart';
 
 class ApiService {
@@ -25,10 +29,28 @@ class ApiService {
   }
 
   static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('jwt_token');
-    await prefs.remove('user_role');
-    await prefs.remove('user_email');
+    try {
+      final token = await getToken();
+      if (token != null && token.isNotEmpty) {
+        final response = await http.post(
+          Uri.parse('$baseUrl/auth/logout'),
+          headers: _headers(token),
+        ).timeout(const Duration(seconds: 3));
+        _checkUnauthorized(response);
+      }
+    } catch (e) {
+      print('API Logout call failed: $e');
+    } finally {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('jwt_token');
+      await prefs.remove('user_role');
+      await prefs.remove('user_email');
+      await prefs.remove('user_fullname');
+      await prefs.remove('user_username');
+      try {
+        await GoogleSignIn().signOut();
+      } catch (_) {}
+    }
   }
 
   static Map<String, String> _headers(String? token) {
@@ -36,6 +58,17 @@ class ApiService {
       'Content-Type': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
+  }
+
+  static void _checkUnauthorized(http.Response response) {
+    if (response.statusCode == 401) {
+      logout().then((_) {
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      });
+    }
   }
 
   // ---- AUTH ----
@@ -46,6 +79,8 @@ class ApiService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
       );
+
+      _checkUnauthorized(response);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -59,12 +94,55 @@ class ApiService {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('user_role', role);
             await prefs.setString('user_email', user['email'] ?? email);
+            if (user['fullName'] != null) {
+              await prefs.setString('user_fullname', user['fullName'].toString());
+            }
+            if (user['username'] != null) {
+              await prefs.setString('user_username', user['username'].toString());
+            }
           }
           return role;
         }
       }
     } catch (e) {
       print('Login error: $e');
+    }
+    return null;
+  }
+
+  static Future<String?> loginWithGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      if (await googleSignIn.isSignedIn()) {
+        await googleSignIn.signOut();
+      }
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        return null; // User cancelled
+      }
+
+      final String email = googleUser.email;
+      final String name = googleUser.displayName ?? email.split('@').first;
+      final String googlePassword = 'GoogleAuth_${email}_SecurePass2024!';
+
+      // Avoid data conflict by clearing stale local session cache before logging in with new Google account
+      await logout();
+
+      // 1. Try login with existing backend endpoints
+      String? role = await login(email, googlePassword);
+      if (role != null) {
+        return role;
+      }
+
+      // 2. If account doesn't exist yet, register then login
+      bool regSuccess = await register(name, email, googlePassword);
+      if (regSuccess) {
+        role = await login(email, googlePassword);
+        return role;
+      }
+    } catch (e) {
+      print('Google login error: $e');
     }
     return null;
   }
@@ -83,12 +161,48 @@ class ApiService {
     return false;
   }
 
+  static Future<bool> validateToken() async {
+    try {
+      final token = await getToken();
+      if (token == null || token.isEmpty) return false;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/auth/profile'),
+        headers: _headers(token),
+      ).timeout(const Duration(seconds: 4));
+
+      _checkUnauthorized(response);
+
+      if (response.statusCode == 200) {
+        final user = jsonDecode(response.body);
+        if (user != null && user['role'] != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_role', user['role'].toString());
+          if (user['email'] != null) {
+            await prefs.setString('user_email', user['email'].toString());
+          }
+          if (user['fullName'] != null) {
+            await prefs.setString('user_fullname', user['fullName'].toString());
+          }
+          if (user['username'] != null) {
+            await prefs.setString('user_username', user['username'].toString());
+          }
+        }
+        return true;
+      }
+    } catch (e) {
+      print('Token validation error: $e');
+    }
+    return false;
+  }
+
   // ---- ACCOUNTS (API First + SQLite Local Merge) ----
   static Future<List<Account>> getAccounts() async {
     List<Account> apiAccounts = [];
     try {
       final token = await getToken();
       final response = await http.get(Uri.parse('$baseUrl/accounts'), headers: _headers(token)).timeout(const Duration(seconds: 4));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         List<dynamic> list = jsonDecode(response.body);
         apiAccounts = list.map((json) => Account.fromMap(json)).toList();
@@ -103,13 +217,13 @@ class ApiService {
 
   static List<Account> _mergeAccounts(List<Account> apiList, List<Account> localList) {
     final Map<String, Account> map = {};
-    for (var acc in apiList) {
-      final key = 'api_${acc.id}_${acc.accountNumber}';
+    for (var acc in localList) {
+      final key = '${acc.bankName}_${acc.accountNumber}'.toLowerCase();
       map[key] = acc;
     }
-    for (var acc in localList) {
-      final key = 'local_${acc.id}_${acc.accountNumber}';
-      map[key] = acc;
+    for (var acc in apiList) {
+      final key = '${acc.bankName}_${acc.accountNumber}'.toLowerCase();
+      map[key] = acc; // API takes precedence, deduplicating duplicates
     }
     return map.values.toList();
   }
@@ -117,7 +231,7 @@ class ApiService {
   static Future<bool> insertAccount(Account account) async {
     try {
       final token = await getToken();
-      await http.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/accounts'),
         headers: _headers(token),
         body: jsonEncode({
@@ -127,6 +241,7 @@ class ApiService {
           'balance': account.balance,
         }),
       ).timeout(const Duration(seconds: 4));
+      _checkUnauthorized(response);
     } catch (e) {
       print('API InsertAccount failed: $e');
     }
@@ -138,7 +253,7 @@ class ApiService {
     try {
       final token = await getToken();
       if (account.id != null) {
-        await http.put(
+        final response = await http.put(
           Uri.parse('$baseUrl/accounts/${account.id}'),
           headers: _headers(token),
           body: jsonEncode({
@@ -148,6 +263,7 @@ class ApiService {
             'balance': account.balance,
           }),
         ).timeout(const Duration(seconds: 4));
+        _checkUnauthorized(response);
       }
     } catch (e) {
       print('API UpdateAccount failed: $e');
@@ -161,7 +277,10 @@ class ApiService {
   static Future<bool> deleteAccount(dynamic id) async {
     try {
       final token = await getToken();
-      await http.delete(Uri.parse('$baseUrl/accounts/$id'), headers: _headers(token)).timeout(const Duration(seconds: 4));
+      if (id != null) {
+        final response = await http.delete(Uri.parse('$baseUrl/accounts/$id'), headers: _headers(token)).timeout(const Duration(seconds: 4));
+        _checkUnauthorized(response);
+      }
     } catch (e) {
       print('API DeleteAccount failed: $e');
     }
@@ -177,6 +296,7 @@ class ApiService {
     try {
       final token = await getToken();
       final response = await http.get(Uri.parse('$baseUrl/transactions'), headers: _headers(token)).timeout(const Duration(seconds: 4));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         List<dynamic> list = jsonDecode(response.body);
         apiTxs = list.map((json) => TransactionModel.fromMap(json)).toList();
@@ -264,7 +384,7 @@ class ApiService {
               headers: _headers(token),
               body: jsonEncode(bodyMap),
             ).timeout(const Duration(seconds: 4));
-            print('Synced notification transaction to API server (${response.statusCode}): ${tx.description}');
+            _checkUnauthorized(response);
           } catch (e) {
             print('Sync notification to API failed: $e');
           }
@@ -334,11 +454,12 @@ class ApiService {
       final categories = await getCategories();
       final bodyMap = _buildApiTransactionBody(tx, categories, accounts);
 
-      await http.post(
+      final response = await http.post(
         Uri.parse('$baseUrl/transactions'),
         headers: _headers(token),
         body: jsonEncode(bodyMap),
       ).timeout(const Duration(seconds: 4));
+      _checkUnauthorized(response);
     } catch (e) {
       print('API InsertTransaction failed: $e');
     }
@@ -354,11 +475,12 @@ class ApiService {
       final bodyMap = _buildApiTransactionBody(tx, categories, accounts);
 
       if (tx.id != null) {
-        await http.put(
+        final response = await http.put(
           Uri.parse('$baseUrl/transactions/${tx.id}'),
           headers: _headers(token),
           body: jsonEncode(bodyMap),
         ).timeout(const Duration(seconds: 4));
+        _checkUnauthorized(response);
       }
     } catch (e) {
       print('API UpdateTransaction failed: $e');
@@ -372,7 +494,10 @@ class ApiService {
   static Future<bool> deleteTransaction(dynamic id) async {
     try {
       final token = await getToken();
-      await http.delete(Uri.parse('$baseUrl/transactions/$id'), headers: _headers(token)).timeout(const Duration(seconds: 4));
+      if (id != null) {
+        final response = await http.delete(Uri.parse('$baseUrl/transactions/$id'), headers: _headers(token)).timeout(const Duration(seconds: 4));
+        _checkUnauthorized(response);
+      }
     } catch (e) {
       print('API DeleteTransaction failed: $e');
     }
@@ -388,11 +513,12 @@ class ApiService {
       if (id != null) {
         final categories = await getCategories();
         final catObj = categories.firstWhere((c) => c.name.toLowerCase() == category.toLowerCase(), orElse: () => categories.first);
-        await http.put(
+        final response = await http.put(
           Uri.parse('$baseUrl/transactions/$id'),
           headers: _headers(token),
           body: jsonEncode({'categoryId': catObj.id}),
         ).timeout(const Duration(seconds: 4));
+        _checkUnauthorized(response);
       }
     } catch (e) {
       print('API UpdateTransactionCategory failed: $e');
@@ -403,27 +529,36 @@ class ApiService {
     return true;
   }
 
-  // ---- CATEGORIES ----
+  // ---- CATEGORIES (Hybrid: API for Default, SQLite for User Custom) ----
   static Future<List<CategoryModel>> getCategories() async {
-    List<CategoryModel> cats = [];
+    List<CategoryModel> apiCats = [];
     try {
       final token = await getToken();
       final response = await http.get(Uri.parse('$baseUrl/categories'), headers: _headers(token)).timeout(const Duration(seconds: 4));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         List<dynamic> list = jsonDecode(response.body);
-        cats = list.map((json) => CategoryModel.fromMap(json)).toList();
+        apiCats = list.map((json) => CategoryModel.fromMap(json)).toList();
       }
     } catch (e) {
       print('API GetCategories failed: $e');
     }
 
-    if (cats.isEmpty) {
-      cats = await DatabaseHelper.instance.getCategories();
+    final localCats = await DatabaseHelper.instance.getCategories();
+
+    final Map<String, CategoryModel> map = {};
+    for (var cat in apiCats) {
+      map['${cat.name.toLowerCase()}_${cat.type}'] = cat;
+    }
+    for (var cat in localCats) {
+      map['${cat.name.toLowerCase()}_${cat.type}'] = cat;
     }
 
-    bool hasKhacExpense = cats.any((c) => c.name.toLowerCase() == 'khác' && c.type == 'EXPENSE');
+    List<CategoryModel> combined = map.values.toList();
+
+    bool hasKhacExpense = combined.any((c) => c.name.toLowerCase() == 'khác' && c.type == 'EXPENSE');
     if (!hasKhacExpense) {
-      cats.add(CategoryModel(
+      combined.add(CategoryModel(
         id: 'default_khac_expense',
         name: 'Khác',
         type: 'EXPENSE',
@@ -432,9 +567,9 @@ class ApiService {
       ));
     }
 
-    bool hasKhacIncome = cats.any((c) => c.name.toLowerCase() == 'khác' && c.type == 'INCOME');
+    bool hasKhacIncome = combined.any((c) => c.name.toLowerCase() == 'khác' && c.type == 'INCOME');
     if (!hasKhacIncome) {
-      cats.add(CategoryModel(
+      combined.add(CategoryModel(
         id: 'default_khac_income',
         name: 'Khác',
         type: 'INCOME',
@@ -443,49 +578,15 @@ class ApiService {
       ));
     }
 
-    return cats;
+    return combined;
   }
 
   static Future<bool> insertCategory(CategoryModel category) async {
-    try {
-      final token = await getToken();
-      await http.post(
-        Uri.parse('$baseUrl/categories'),
-        headers: _headers(token),
-        body: jsonEncode({
-          'name': category.name,
-          'type': category.type,
-          'color': category.color,
-          'icon': category.icon,
-          'isActive': category.isActive == 1,
-        }),
-      ).timeout(const Duration(seconds: 4));
-    } catch (e) {
-      print('API InsertCategory failed: $e');
-    }
     await DatabaseHelper.instance.insertCategory(category);
     return true;
   }
 
   static Future<bool> updateCategory(CategoryModel category) async {
-    try {
-      final token = await getToken();
-      if (category.id != null) {
-        await http.put(
-          Uri.parse('$baseUrl/categories/${category.id}'),
-          headers: _headers(token),
-          body: jsonEncode({
-            'name': category.name,
-            'type': category.type,
-            'color': category.color,
-            'icon': category.icon,
-            'isActive': category.isActive == 1,
-          }),
-        ).timeout(const Duration(seconds: 4));
-      }
-    } catch (e) {
-      print('API UpdateCategory failed: $e');
-    }
     if (category.id is int) {
       await DatabaseHelper.instance.updateCategory(category);
     }
@@ -493,12 +594,6 @@ class ApiService {
   }
 
   static Future<bool> deleteCategory(dynamic id, String targetCategoryName) async {
-    try {
-      final token = await getToken();
-      await http.delete(Uri.parse('$baseUrl/categories/$id'), headers: _headers(token)).timeout(const Duration(seconds: 4));
-    } catch (e) {
-      print('API DeleteCategory failed: $e');
-    }
     if (id is int) {
       await DatabaseHelper.instance.deleteCategorySafe(id, targetCategoryName);
     }
@@ -514,6 +609,7 @@ class ApiService {
       if (status != null && status.isNotEmpty) url += '&status=$status';
 
       final response = await http.get(Uri.parse(url), headers: _headers(token));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded.containsKey('data')) {
@@ -536,6 +632,7 @@ class ApiService {
         headers: _headers(token),
         body: jsonEncode({'reason': reason}),
       );
+      _checkUnauthorized(response);
       return response.statusCode == 200;
     } catch (e) {
       print('LockUser error: $e');
@@ -550,6 +647,7 @@ class ApiService {
         Uri.parse('$baseUrl/admin/users/$userId/unlock'),
         headers: _headers(token),
       );
+      _checkUnauthorized(response);
       return response.statusCode == 200;
     } catch (e) {
       print('UnlockUser error: $e');
@@ -565,6 +663,7 @@ class ApiService {
         headers: _headers(token),
         body: jsonEncode({'reason': reason}),
       );
+      _checkUnauthorized(response);
       return response.statusCode == 200;
     } catch (e) {
       print('DeactivateUser error: $e');
@@ -576,6 +675,7 @@ class ApiService {
     try {
       final token = await getToken();
       final response = await http.get(Uri.parse('$baseUrl/admin/sessions'), headers: _headers(token));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded.containsKey('data')) return decoded['data'];
@@ -595,6 +695,7 @@ class ApiService {
         headers: _headers(token),
         body: jsonEncode({'reason': reason}),
       );
+      _checkUnauthorized(response);
       return response.statusCode == 200;
     } catch (e) {
       print('RevokeSession error: $e');
@@ -606,6 +707,7 @@ class ApiService {
     try {
       final token = await getToken();
       final response = await http.get(Uri.parse('$baseUrl/admin/security/statistics'), headers: _headers(token));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded.containsKey('data')) return decoded['data'];
@@ -621,6 +723,7 @@ class ApiService {
     try {
       final token = await getToken();
       final response = await http.get(Uri.parse('$baseUrl/admin/settings/security'), headers: _headers(token));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded.containsKey('data')) return decoded['data'];
@@ -640,6 +743,7 @@ class ApiService {
         headers: _headers(token),
         body: jsonEncode(settings),
       );
+      _checkUnauthorized(response);
       return response.statusCode == 200;
     } catch (e) {
       print('UpdateSecuritySettings error: $e');
@@ -651,6 +755,7 @@ class ApiService {
     try {
       final token = await getToken();
       final response = await http.get(Uri.parse('$baseUrl/admin/audit-logs'), headers: _headers(token));
+      _checkUnauthorized(response);
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is Map && decoded.containsKey('data')) return decoded['data'];

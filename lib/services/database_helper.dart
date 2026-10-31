@@ -165,6 +165,16 @@ class DatabaseHelper {
     return null;
   }
 
+  Future<int> updateAccount(Account account) async {
+    final db = await database;
+    return await db.update(
+      'accounts',
+      account.toMap(),
+      where: 'id = ?',
+      whereArgs: [account.id],
+    );
+  }
+
   Future<int> updateAccountBalance(int accountId, double newBalance) async {
     final db = await database;
     return await db.update(

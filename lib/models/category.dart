@@ -27,7 +27,16 @@ class CategoryModel {
   }
 
   factory CategoryModel.fromMap(Map<String, dynamic> map) {
-    bool activeBool = map['isActive'] ?? map['IsActive'] ?? true;
+    var rawActive = map['isActive'] ?? map['IsActive'] ?? true;
+    bool activeBool = true;
+    if (rawActive is bool) {
+      activeBool = rawActive;
+    } else if (rawActive is int) {
+      activeBool = rawActive == 1;
+    } else if (rawActive is String) {
+      activeBool = rawActive.toLowerCase() == 'true' || rawActive == '1';
+    }
+
     return CategoryModel(
       id: map['id'] ?? map['Id'],
       name: map['name'] ?? map['Name'] ?? '',

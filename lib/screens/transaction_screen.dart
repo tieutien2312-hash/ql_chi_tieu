@@ -276,6 +276,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
     dynamic selectedAccountId = refreshedAccounts.isNotEmpty ? refreshedAccounts.first.id : null;
     String selectedType = 'EXPENSE';
     String selectedCategory = categories.isNotEmpty ? categories.first.name : 'Khác';
+    String selectedTransactionTime = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
     final amountController = TextEditingController();
     final noteController = TextEditingController();
 
@@ -356,6 +357,58 @@ class _TransactionScreenState extends State<TransactionScreen> {
                       controller: noteController,
                       decoration: const InputDecoration(labelText: 'Ghi chú / Nội dung'),
                     ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        DateTime initialDate = DateTime.now();
+                        try {
+                          final parts = selectedTransactionTime.split(' ');
+                          if (parts.isNotEmpty) {
+                            final dParts = parts[0].split('/');
+                            if (dParts.length == 3) {
+                              initialDate = DateTime(int.parse(dParts[2]), int.parse(dParts[1]), int.parse(dParts[0]));
+                            }
+                          }
+                        } catch (_) {}
+
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: initialDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                        );
+
+                        if (pickedDate != null) {
+                          final TimeOfDay? pickedTime = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(initialDate),
+                          );
+
+                          if (pickedTime != null) {
+                            final finalDt = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                            setDialogState(() {
+                              selectedTransactionTime = DateFormat('dd/MM/yyyy HH:mm').format(finalDt);
+                            });
+                          }
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Thời gian giao dịch*'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(selectedTransactionTime, style: const TextStyle(fontSize: 14)),
+                            const Icon(Icons.calendar_today, size: 18, color: AppTheme.primaryCyan),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -368,7 +421,6 @@ class _TransactionScreenState extends State<TransactionScreen> {
                   onPressed: () async {
                     final amount = double.tryParse(amountController.text.trim()) ?? 0.0;
                     if (amount > 0 && selectedAccountId != null) {
-                      final currentTime = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
                       final tx = TransactionModel(
                         accountId: selectedAccountId!,
                         type: selectedType,
@@ -377,7 +429,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
                         description: noteController.text.trim().isEmpty
                             ? (selectedType == 'INCOME' ? 'Thu nhập tiền mặt' : 'Chi tiêu tiền mặt')
                             : noteController.text.trim(),
-                        transactionTime: currentTime,
+                        transactionTime: selectedTransactionTime,
                         source: 'manual',
                         category: selectedCategory,
                       );
@@ -412,10 +464,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
               content: DropdownButtonFormField<String>(
                 value: selectedCategory,
                 decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                items: _categories.map((cat) {
+                items: _categories.map((c) => c.name).toSet().toList().map((name) {
                   return DropdownMenuItem<String>(
-                    value: cat.name,
-                    child: Text(cat.name),
+                    value: name,
+                    child: Text(name),
                   );
                 }).toList(),
                 onChanged: (val) {
@@ -488,7 +540,7 @@ class _TransactionScreenState extends State<TransactionScreen> {
 
   void _showAdvancedFilterModal() {
     String tempType = _filterType;
-    int? tempAccountId = _filterAccountId;
+    dynamic tempAccountId = _filterAccountId;
     String? tempCategory = _filterCategory;
     DateTimeRange? tempDateRange = _filterDateRange;
 
@@ -567,12 +619,12 @@ class _TransactionScreenState extends State<TransactionScreen> {
                             const SizedBox(height: 16),
                             const Text('Tài khoản / Ngân hàng', style: TextStyle(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 8),
-                            DropdownButtonFormField<int?>(
+                            DropdownButtonFormField<dynamic>(
                               value: tempAccountId,
                               decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                               items: [
-                                const DropdownMenuItem<int?>(value: null, child: Text('Tất cả tài khoản')),
-                                ..._accounts.map((acc) => DropdownMenuItem<int?>(
+                                const DropdownMenuItem<dynamic>(value: null, child: Text('Tất cả tài khoản')),
+                                ..._accounts.map((acc) => DropdownMenuItem<dynamic>(
                                       value: acc.id,
                                       child: Text('${acc.bankName} (${_maskAccountNumber(acc.accountNumber)})'),
                                     )),
@@ -587,9 +639,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
                               decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
                               items: [
                                 const DropdownMenuItem<String?>(value: null, child: Text('Tất cả danh mục')),
-                                ..._categories.map((cat) => DropdownMenuItem<String?>(
-                                      value: cat.name,
-                                      child: Text(cat.name),
+                                ..._categories.map((c) => c.name).toSet().toList().map((name) => DropdownMenuItem<String?>(
+                                      value: name,
+                                      child: Text(name),
                                     )),
                               ],
                               onChanged: (val) => setModalState(() => tempCategory = val),
@@ -759,10 +811,10 @@ class _TransactionScreenState extends State<TransactionScreen> {
                             DropdownButtonFormField<String>(
                               value: selectedCategory,
                               decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                              items: _categories.map((cat) {
+                              items: _categories.map((c) => c.name).toSet().toList().map((name) {
                                 return DropdownMenuItem<String>(
-                                  value: cat.name,
-                                  child: Text(cat.name),
+                                  value: name,
+                                  child: Text(name),
                                 );
                               }).toList(),
                               onChanged: (val) {

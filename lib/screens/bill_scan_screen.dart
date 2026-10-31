@@ -20,7 +20,7 @@ class BillScanScreen extends StatefulWidget {
 }
 
 class _BillScanScreenState extends State<BillScanScreen> {
-  static const String _geminiApiKey = 'Your Gemini API Key';
+  static const String _geminiApiKey = 'vv';
 
   File? _imageFile;
   bool _isScanning = false;
@@ -31,6 +31,7 @@ class _BillScanScreenState extends State<BillScanScreen> {
   dynamic _selectedAccountId;
   String _selectedCategory = 'Khác';
   String _selectedType = 'EXPENSE';
+  String _transactionTime = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
   List<Account> _accounts = [];
   List<CategoryModel> _categories = [];
@@ -131,7 +132,8 @@ JSON format:
 {
   "title": "Tên thương hiệu/quán/nội dung giao dịch chính",
   "amount": Số tiền thanh toán cuối cùng (số nguyên),
-  "category": "Ăn uống" hoặc "Mua sắm" hoặc "Di chuyển" hoặc "Hóa đơn" hoặc "Khác"
+  "category": "Ăn uống" hoặc "Mua sắm" hoặc "Di chuyển" hoặc "Hóa đơn" hoặc "Khác",
+  "date": "Ngày giờ trên hóa đơn định dạng dd/MM/yyyy HH:mm (nếu không rõ lấy ngày giờ hiện tại)"
 }
 ''';
 
@@ -140,7 +142,6 @@ JSON format:
 
       while (retries > 0) {
         try {
-          // Gửi text qua mạng chỉ mất vài mili-giây
           response = await model.generateContent([Content.text(prompt)]);
           break;
         } catch (e) {
@@ -152,7 +153,6 @@ JSON format:
 
       final responseText = response?.text;
       if (responseText != null && responseText.isNotEmpty) {
-        // Loại bỏ markdown code block nếu có
         String cleanJson = responseText.trim();
         if (cleanJson.startsWith('```json')) {
           cleanJson = cleanJson.substring(7);
@@ -174,6 +174,7 @@ JSON format:
 
         String detectedTitle = data['title']?.toString() ?? 'Chi tiêu hóa đơn';
         String detectedCategory = data['category']?.toString() ?? 'Khác';
+        String detectedDate = data['date']?.toString() ?? DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
 
         String matchedCategory = 'Khác';
         for (var cat in _categories) {
@@ -192,12 +193,65 @@ JSON format:
             _descriptionController.text = detectedTitle;
             _selectedCategory = matchedCategory;
             _selectedType = 'EXPENSE';
+            _transactionTime = detectedDate.isNotEmpty ? detectedDate : DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
           });
         }
       }
     } catch (e) {
       debugPrint('Lỗi AI parse text: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _pickDateTime() async {
+    DateTime initialDate = DateTime.now();
+    try {
+      final parts = _transactionTime.split(' ');
+      if (parts.isNotEmpty) {
+        final dParts = parts[0].split('/');
+        if (dParts.length == 3) {
+          int day = int.parse(dParts[0]);
+          int month = int.parse(dParts[1]);
+          int year = int.parse(dParts[2]);
+          int hour = 0;
+          int minute = 0;
+          if (parts.length > 1) {
+            final tParts = parts[1].split(':');
+            if (tParts.length >= 2) {
+              hour = int.parse(tParts[0]);
+              minute = int.parse(tParts[1]);
+            }
+          }
+          initialDate = DateTime(year, month, day, hour, minute);
+        }
+      }
+    } catch (_) {}
+
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+
+    if (pickedDate != null) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(initialDate),
+      );
+
+      if (pickedTime != null) {
+        final finalDt = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+        setState(() {
+          _transactionTime = DateFormat('dd/MM/yyyy HH:mm').format(finalDt);
+        });
+      }
     }
   }
 
@@ -212,14 +266,13 @@ JSON format:
       return;
     }
 
-    final currentTime = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
     final tx = TransactionModel(
       accountId: _selectedAccountId!,
       type: _selectedType,
       amount: amount,
       balanceAfter: 0,
       description: _descriptionController.text.trim().isEmpty ? 'Giao dịch quét bill' : _descriptionController.text.trim(),
-      transactionTime: currentTime,
+      transactionTime: _transactionTime,
       source: 'bill_scan',
       category: _selectedCategory,
     );
@@ -400,6 +453,20 @@ JSON format:
                         );
                       }).toList(),
                       onChanged: (val) => setState(() => _selectedCategory = val!),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: _pickDateTime,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Thời gian giao dịch*'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(_transactionTime, style: const TextStyle(fontSize: 14)),
+                            const Icon(Icons.calendar_today, size: 18, color: AppTheme.primaryCyan),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 20),
                     SizedBox(

@@ -108,6 +108,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
     final categories = _categories;
     String selectedType = 'EXPENSE';
     String selectedCategory = categories.isNotEmpty ? categories.first.name : 'Khác';
+    String selectedTransactionTime = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
     final amountController = TextEditingController();
     final noteController = TextEditingController();
 
@@ -173,6 +174,58 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                       controller: noteController,
                       decoration: const InputDecoration(labelText: 'Ghi chú / Nội dung'),
                     ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () async {
+                        DateTime initialDate = DateTime.now();
+                        try {
+                          final parts = selectedTransactionTime.split(' ');
+                          if (parts.isNotEmpty) {
+                            final dParts = parts[0].split('/');
+                            if (dParts.length == 3) {
+                              initialDate = DateTime(int.parse(dParts[2]), int.parse(dParts[1]), int.parse(dParts[0]));
+                            }
+                          }
+                        } catch (_) {}
+
+                        final DateTime? pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: initialDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                        );
+
+                        if (pickedDate != null) {
+                          final TimeOfDay? pickedTime = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(initialDate),
+                          );
+
+                          if (pickedTime != null) {
+                            final finalDt = DateTime(
+                              pickedDate.year,
+                              pickedDate.month,
+                              pickedDate.day,
+                              pickedTime.hour,
+                              pickedTime.minute,
+                            );
+                            setDialogState(() {
+                              selectedTransactionTime = DateFormat('dd/MM/yyyy HH:mm').format(finalDt);
+                            });
+                          }
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Thời gian giao dịch*'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(selectedTransactionTime, style: const TextStyle(fontSize: 14)),
+                            const Icon(Icons.calendar_today, size: 18, color: AppTheme.primaryCyan),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -186,7 +239,6 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                   onPressed: () async {
                     final amount = double.tryParse(amountController.text.trim()) ?? 0.0;
                     if (amount > 0) {
-                      final currentTime = DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now());
                       final tx = TransactionModel(
                         accountId: widget.account.id!,
                         type: selectedType,
@@ -195,7 +247,7 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> with SingleTick
                         description: noteController.text.trim().isEmpty
                             ? (selectedType == 'INCOME' ? 'Thu nhập thủ công' : 'Chi tiêu thủ công')
                             : noteController.text.trim(),
-                        transactionTime: currentTime,
+                        transactionTime: selectedTransactionTime,
                         source: 'manual',
                         category: selectedCategory,
                       );
