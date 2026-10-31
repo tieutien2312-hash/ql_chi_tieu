@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/category.dart';
-import '../services/database_helper.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class CategoryManagementScreen extends StatefulWidget {
@@ -18,27 +18,14 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
   final List<String> _availableColors = [
     '#F97316', // Orange
     '#3B82F6', // Blue
-    '#8B5CF6', // Purple
-    '#10B981', // Green
     '#EC4899', // Pink
+    '#10B981', // Emerald
+    '#8B5CF6', // Purple
     '#EF4444', // Red
-    '#0EA5E9', // Light Blue
+    '#0EA5E9', // Sky Blue
     '#F59E0B', // Amber
+    '#6366F1', // Indigo
     '#6B7280', // Gray
-  ];
-
-  final List<Map<String, String>> _availableIcons = [
-    {'name': 'restaurant', 'label': 'Ăn uống'},
-    {'name': 'shopping_bag', 'label': 'Mua sắm'},
-    {'name': 'directions_car', 'label': 'Di chuyển'},
-    {'name': 'receipt', 'label': 'Hóa đơn'},
-    {'name': 'sports_esports', 'label': 'Giải trí'},
-    {'name': 'favorite', 'label': 'Sức khỏe'},
-    {'name': 'school', 'label': 'Học tập'},
-    {'name': 'work', 'label': 'Lương'},
-    {'name': 'card_giftcard', 'label': 'Thưởng'},
-    {'name': 'attach_money', 'label': 'Thu nhập'},
-    {'name': 'more_horiz', 'label': 'Khác'},
   ];
 
   @override
@@ -56,7 +43,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
 
   Future<void> _loadCategories() async {
     setState(() => _isLoading = true);
-    final cats = await DatabaseHelper.instance.getCategories();
+    final cats = await ApiService.getCategories();
     setState(() {
       _categories = cats;
       _isLoading = false;
@@ -90,13 +77,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
     }
   }
 
-  Color _getColorFromHex(String hexColor) {
+  Color _parseColor(String hexColor) {
     try {
-      hexColor = hexColor.replaceAll('#', '');
-      if (hexColor.length == 6) {
-        hexColor = 'FF$hexColor';
-      }
-      return Color(int.parse(hexColor, radix: 16));
+      return Color(int.parse(hexColor.replaceFirst('#', '0xFF')));
     } catch (_) {
       return AppTheme.primaryCyan;
     }
@@ -108,6 +91,19 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
     String selectedType = categoryToEdit?.type ?? (_tabController.index == 0 ? 'EXPENSE' : 'INCOME');
     String selectedColor = categoryToEdit?.color ?? _availableColors[0];
     String selectedIcon = categoryToEdit?.icon ?? 'restaurant';
+
+    final List<Map<String, String>> iconOptions = [
+      {'name': 'restaurant', 'label': 'Ăn uống'},
+      {'name': 'shopping_bag', 'label': 'Mua sắm'},
+      {'name': 'directions_car', 'label': 'Di chuyển'},
+      {'name': 'receipt', 'label': 'Hóa đơn'},
+      {'name': 'sports_esports', 'label': 'Giải trí'},
+      {'name': 'favorite', 'label': 'Sức khỏe'},
+      {'name': 'school', 'label': 'Học tập'},
+      {'name': 'work', 'label': 'Lương/Công việc'},
+      {'name': 'card_giftcard', 'label': 'Thưởng/Quà'},
+      {'name': 'attach_money', 'label': 'Thu nhập khác'},
+    ];
 
     showDialog(
       context: context,
@@ -121,36 +117,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Preview Card
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: _getColorFromHex(selectedColor).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _getColorFromHex(selectedColor)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(_getIconData(selectedIcon), color: _getColorFromHex(selectedColor)),
-                            const SizedBox(width: 8),
-                            Text(
-                              nameController.text.trim().isEmpty ? 'Tên danh mục' : nameController.text.trim(),
-                              style: TextStyle(fontWeight: FontWeight.bold, color: _getColorFromHex(selectedColor)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(labelText: 'Tên danh mục*', border: OutlineInputBorder()),
-                      onChanged: (_) => setDialogState(() {}),
+                      decoration: const InputDecoration(labelText: 'Tên danh mục*'),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Loại danh mục:', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text('Loại danh mục', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textSecondary)),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -159,7 +131,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                             label: const Center(child: Text('Chi tiêu')),
                             selected: selectedType == 'EXPENSE',
                             selectedColor: Colors.red.shade100,
-                            onSelected: (val) => setDialogState(() => selectedType = 'EXPENSE'),
+                            onSelected: (selected) {
+                              setDialogState(() => selectedType = 'EXPENSE');
+                            },
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -168,19 +142,21 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                             label: const Center(child: Text('Thu nhập')),
                             selected: selectedType == 'INCOME',
                             selectedColor: Colors.green.shade100,
-                            onSelected: (val) => setDialogState(() => selectedType = 'INCOME'),
+                            onSelected: (selected) {
+                              setDialogState(() => selectedType = 'INCOME');
+                            },
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text('Màu sắc nhận diện:', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text('Màu sắc', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textSecondary)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: _availableColors.map((hex) {
-                        final color = _getColorFromHex(hex);
+                        final color = _parseColor(hex);
                         final isSelected = selectedColor == hex;
                         return GestureDetector(
                           onTap: () => setDialogState(() => selectedColor = hex),
@@ -190,10 +166,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                             decoration: BoxDecoration(
                               color: color,
                               shape: BoxShape.circle,
-                              border: Border.all(
-                                color: isSelected ? Colors.black : Colors.transparent,
-                                width: 3,
-                              ),
+                              border: Border.all(color: isSelected ? Colors.black : Colors.transparent, width: 3),
                             ),
                             child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
                           ),
@@ -201,17 +174,17 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                       }).toList(),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Biểu tượng:', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text('Biểu tượng', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textSecondary)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       value: selectedIcon,
                       decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                      items: _availableIcons.map((item) {
+                      items: iconOptions.map((item) {
                         return DropdownMenuItem<String>(
                           value: item['name'],
                           child: Row(
                             children: [
-                              Icon(_getIconData(item['name']!), size: 20),
+                              Icon(_getIconData(item['name']!), color: _parseColor(selectedColor)),
                               const SizedBox(width: 12),
                               Text(item['label']!),
                             ],
@@ -250,7 +223,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                         color: selectedColor,
                         icon: selectedIcon,
                       );
-                      await DatabaseHelper.instance.updateCategory(updated);
+                      await ApiService.updateCategory(updated);
                     } else {
                       final newCat = CategoryModel(
                         name: name,
@@ -258,7 +231,7 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                         color: selectedColor,
                         icon: selectedIcon,
                       );
-                      await DatabaseHelper.instance.insertCategory(newCat);
+                      await ApiService.insertCategory(newCat);
                     }
 
                     if (context.mounted) {
@@ -280,85 +253,24 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
   }
 
   void _confirmDeleteCategory(CategoryModel category) async {
-    int affectedCount = await DatabaseHelper.instance.countTransactionsWithCategory(category.name);
+    bool confirm = await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Xác nhận xóa'),
+            content: Text('Bạn có chắc chắn muốn xóa danh mục "${category.name}" không?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy', style: TextStyle(color: AppTheme.textSecondary))),
+              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xóa', style: TextStyle(color: AppTheme.errorRed))),
+            ],
+          ),
+        ) ??
+        false;
 
-    if (!mounted) return;
-
-    if (affectedCount > 0) {
-      List<CategoryModel> otherCategories = _categories.where((c) => c.id != category.id && c.type == category.type).toList();
-      if (otherCategories.isEmpty) {
-        otherCategories = _categories.where((c) => c.id != category.id).toList();
-      }
-      String targetCategory = otherCategories.isNotEmpty ? otherCategories.first.name : 'Khác';
-
-      showDialog(
-        context: context,
-        builder: (context) {
-          return StatefulBuilder(
-            builder: (context, setDialogState) {
-              return AlertDialog(
-                title: const Text('Xóa danh mục'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Danh mục "${category.name}" đang được sử dụng bởi $affectedCount giao dịch.'),
-                    const SizedBox(height: 12),
-                    const Text('Vui lòng chọn danh mục thay thế để chuyển các giao dịch này sang trước khi xóa:'),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: targetCategory,
-                      decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
-                      items: otherCategories.map((cat) {
-                        return DropdownMenuItem<String>(
-                          value: cat.name,
-                          child: Text(cat.name),
-                        );
-                      }).toList(),
-                      onChanged: (val) => setDialogState(() => targetCategory = val!),
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Hủy', style: TextStyle(color: AppTheme.textSecondary))),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorRed, foregroundColor: Colors.white),
-                    onPressed: () async {
-                      await DatabaseHelper.instance.deleteCategorySafe(category.id!, targetCategory);
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        _loadCategories();
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa danh mục và chuyển đổi giao dịch thành công!')));
-                      }
-                    },
-                    child: const Text('Xác nhận xóa'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      );
-    } else {
-      bool confirm = await showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Xác nhận xóa'),
-              content: Text('Bạn có chắc chắn muốn xóa danh mục "${category.name}" không?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Hủy', style: TextStyle(color: AppTheme.textSecondary))),
-                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xóa', style: TextStyle(color: AppTheme.errorRed))),
-              ],
-            ),
-          ) ??
-          false;
-
-      if (confirm) {
-        await DatabaseHelper.instance.deleteCategorySafe(category.id!, 'Khác');
-        _loadCategories();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa danh mục thành công!')));
-        }
+    if (confirm && category.id != null) {
+      await ApiService.deleteCategory(category.id, 'Khác');
+      _loadCategories();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa danh mục thành công!')));
       }
     }
   }
@@ -374,11 +286,12 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
         title: const Text('Quản lý danh mục'),
         backgroundColor: AppTheme.surfaceWhite,
         foregroundColor: AppTheme.textPrimary,
+        elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AppTheme.primaryCyan,
-          labelColor: AppTheme.primaryCyan,
+          labelColor: AppTheme.primaryCyanDark,
           unselectedLabelColor: AppTheme.textSecondary,
+          indicatorColor: AppTheme.primaryCyan,
           tabs: const [
             Tab(text: 'Chi tiêu'),
             Tab(text: 'Thu nhập'),
@@ -398,7 +311,6 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
         onPressed: () => _showAddEditCategoryDialog(),
         backgroundColor: AppTheme.primaryCyan,
         foregroundColor: Colors.white,
-        tooltip: 'Thêm danh mục',
         child: const Icon(Icons.add),
       ),
     );
@@ -406,7 +318,9 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
 
   Widget _buildCategoryList(List<CategoryModel> categories) {
     if (categories.isEmpty) {
-      return const Center(child: Text('Chưa có danh mục nào.', style: TextStyle(color: AppTheme.textSecondary)));
+      return const Center(
+        child: Text('Chưa có danh mục nào.', style: TextStyle(color: AppTheme.textSecondary)),
+      );
     }
 
     return ListView.builder(
@@ -414,40 +328,31 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
       itemCount: categories.length,
       itemBuilder: (context, index) {
         final cat = categories[index];
-        final color = _getColorFromHex(cat.color);
+        final color = _parseColor(cat.color);
+        final icon = _getIconData(cat.icon);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 10),
           elevation: 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: const BorderSide(color: AppTheme.borderLight),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppTheme.borderLight)),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            leading: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(_getIconData(cat.icon), color: color),
+            leading: CircleAvatar(
+              backgroundColor: color.withOpacity(0.15),
+              child: Icon(icon, color: color),
             ),
-            title: Text(
-              cat.name,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: AppTheme.textPrimary),
-            ),
-            trailing: PopupMenuButton<String>(
-              onSelected: (val) {
-                if (val == 'edit') {
-                  _showAddEditCategoryDialog(categoryToEdit: cat);
-                } else if (val == 'delete') {
-                  _confirmDeleteCategory(cat);
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('Chỉnh sửa')),
-                const PopupMenuItem(value: 'delete', child: Text('Xóa', style: TextStyle(color: AppTheme.errorRed))),
+            title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textPrimary)),
+            subtitle: Text(cat.type == 'EXPENSE' ? 'Danh mục Chi tiêu' : 'Danh mục Thu nhập', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryCyanDark),
+                  onPressed: () => _showAddEditCategoryDialog(categoryToEdit: cat),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppTheme.errorRed),
+                  onPressed: () => _confirmDeleteCategory(cat),
+                ),
               ],
             ),
           ),

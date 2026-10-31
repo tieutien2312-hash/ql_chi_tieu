@@ -5,6 +5,7 @@ import '../models/account.dart';
 import '../models/category.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'bill_scan_screen.dart';
 
 class TransactionScreen extends StatefulWidget {
   const TransactionScreen({super.key});
@@ -207,6 +208,52 @@ class _TransactionScreenState extends State<TransactionScreen> {
         _isSelecting = true;
       }
     });
+  }
+
+  void _showAddTransactionOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Thêm giao dịch', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const CircleAvatar(backgroundColor: AppTheme.primaryCyan, child: Icon(Icons.edit, color: Colors.white)),
+                title: const Text('1. Nhập thủ công'),
+                subtitle: const Text('Tự điền thông tin thu chi'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAddManualTransactionDialog();
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const CircleAvatar(backgroundColor: Colors.indigo, child: Icon(Icons.document_scanner, color: Colors.white)),
+                title: const Text('2. Quét Bill (Hóa đơn)'),
+                subtitle: const Text('Chụp hoặc chọn ảnh để AI đọc thông tin'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const BillScanScreen()),
+                  );
+                  if (result == true) {
+                    _loadData();
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _showAddManualTransactionDialog() async {
@@ -906,9 +953,9 @@ class _TransactionScreenState extends State<TransactionScreen> {
                                 const SizedBox(width: 8),
                                 IconButton.filled(
                                   style: IconButton.styleFrom(backgroundColor: Color(0xFF08C7E8)),
-                                  onPressed: _showAddManualTransactionDialog,
+                                  onPressed: _showAddTransactionOptions,
                                   icon: const Icon(Icons.add, color: Colors.white),
-                                  tooltip: 'Thêm giao dịch thủ công',
+                                  tooltip: 'Thêm giao dịch',
                                 ),
                               ],
                             ),

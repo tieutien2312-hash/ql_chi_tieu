@@ -1,4 +1,52 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+// Notifier toàn cục để cập nhật Theme và Font Size toàn ứng dụng
+class AppSettingsController extends ChangeNotifier {
+  static final AppSettingsController instance = AppSettingsController._();
+  AppSettingsController._();
+
+  double _fontSizeScale = 1.0;
+  String _accentColorName = 'Cyan';
+
+  double get fontSizeScale => _fontSizeScale;
+  String get accentColorName => _accentColorName;
+
+  Color get primaryColor {
+    switch (_accentColorName) {
+      case 'Indigo':
+        return const Color(0xFF6366F1);
+      case 'Emerald':
+        return AppTheme.successGreen;
+      case 'Orange':
+        return const Color(0xFFF97316);
+      case 'Cyan':
+      default:
+        return AppTheme.primaryCyan;
+    }
+  }
+
+  Future<void> loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _fontSizeScale = prefs.getDouble('font_size_scale') ?? 1.0;
+    _accentColorName = prefs.getString('accent_color') ?? 'Cyan';
+    notifyListeners();
+  }
+
+  Future<void> updateFontSize(double scale) async {
+    _fontSizeScale = scale;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('font_size_scale', scale);
+  }
+
+  Future<void> updateAccentColor(String colorName) async {
+    _accentColorName = colorName;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('accent_color', colorName);
+  }
+}
 
 class AppTheme {
   // Brand colors based on reference design
@@ -13,12 +61,13 @@ class AppTheme {
   static const Color errorRed = Color(0xFFEF4444);
 
   static ThemeData get lightTheme {
+    final primary = AppSettingsController.instance.primaryColor;
     return ThemeData(
       useMaterial3: true,
       scaffoldBackgroundColor: backgroundLight,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryCyan,
-        primary: primaryCyan,
+        seedColor: primary,
+        primary: primary,
         surface: surfaceWhite,
         background: backgroundLight,
       ),
@@ -43,7 +92,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primaryCyan,
+          backgroundColor: primary,
           foregroundColor: Colors.white,
           elevation: 2,
           shape: RoundedRectangleBorder(
@@ -70,13 +119,13 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: primaryCyan, width: 2),
+          borderSide: BorderSide(color: primary, width: 2),
         ),
         hintStyle: const TextStyle(color: textSecondary),
       ),
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: surfaceWhite,
-        selectedItemColor: primaryCyan,
+        selectedItemColor: primary,
         unselectedItemColor: textSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,

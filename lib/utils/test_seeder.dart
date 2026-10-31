@@ -1,11 +1,10 @@
 import 'package:intl/intl.dart';
 import '../models/account.dart';
 import '../models/transaction_model.dart';
-import '../services/database_helper.dart';
+import '../services/api_service.dart';
 
 class TestSeeder {
   static Future<void> insertSampleData() async {
-    final dbHelper = DatabaseHelper.instance;
     final now = DateTime.now();
 
     // 1. Current month dates
@@ -35,38 +34,40 @@ class TestSeeder {
     final yearTransDate1 = DateFormat('dd/MM/yyyy HH:mm').format(yearTransitionDate.add(const Duration(days: 5)));
 
     // 1. Insert sample accounts
-    int vcbId = await dbHelper.insertAccount(
-      Account(
-        bankName: 'Vietcombank',
-        accountName: 'TK Cá nhân VCB',
-        accountNumber: '****6789',
-        balance: 28500000,
-        createdAt: yearTransDate0,
-      ),
+    final accVCB = Account(
+      bankName: 'Vietcombank',
+      accountName: 'TK Cá nhân VCB',
+      accountNumber: '****6789',
+      balance: 28500000,
+      createdAt: yearTransDate0,
     );
+    await ApiService.insertAccount(accVCB);
 
-    int mbId = await dbHelper.insertAccount(
-      Account(
-        bankName: 'MB Bank',
-        accountName: 'TK Lương MB',
-        accountNumber: '****9999',
-        balance: 21200000,
-        createdAt: yearTransDate0,
-      ),
+    final accMB = Account(
+      bankName: 'MB Bank',
+      accountName: 'TK Lương MB',
+      accountNumber: '****9999',
+      balance: 21200000,
+      createdAt: yearTransDate0,
     );
+    await ApiService.insertAccount(accMB);
 
-    int momoId = await dbHelper.insertAccount(
-      Account(
-        bankName: 'Ví Momo',
-        accountName: 'Ví điện tử Momo',
-        accountNumber: '0987654321',
-        balance: 3250000,
-        createdAt: yearTransDate0,
-      ),
+    final accMomo = Account(
+      bankName: 'Ví Momo',
+      accountName: 'Ví điện tử Momo',
+      accountNumber: '0987654321',
+      balance: 3250000,
+      createdAt: yearTransDate0,
     );
+    await ApiService.insertAccount(accMomo);
+
+    final accounts = await ApiService.getAccounts();
+    dynamic vcbId = accounts.firstWhere((a) => a.bankName == 'Vietcombank', orElse: () => accounts.first).id;
+    dynamic mbId = accounts.firstWhere((a) => a.bankName == 'MB Bank', orElse: () => accounts.first).id;
+    dynamic momoId = accounts.firstWhere((a) => a.bankName == 'Ví Momo', orElse: () => accounts.first).id;
 
     // ---- DATASET 1: December of Previous Year (Tháng 12 năm trước - Year Transition Test) ----
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: vcbId,
         type: 'INCOME',
@@ -78,7 +79,7 @@ class TestSeeder {
         category: 'Lương',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: vcbId,
         type: 'EXPENSE',
@@ -92,7 +93,7 @@ class TestSeeder {
     );
 
     // ---- DATASET 2: 3 Months Ago ----
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: mbId,
         type: 'INCOME',
@@ -104,7 +105,7 @@ class TestSeeder {
         category: 'Lương',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: mbId,
         type: 'EXPENSE',
@@ -118,7 +119,7 @@ class TestSeeder {
     );
 
     // ---- DATASET 3: 2 Months Ago ----
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: mbId,
         type: 'INCOME',
@@ -130,7 +131,7 @@ class TestSeeder {
         category: 'Lương',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: mbId,
         type: 'EXPENSE',
@@ -144,7 +145,7 @@ class TestSeeder {
     );
 
     // ---- DATASET 4: Previous Month (Tháng trước) ----
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: vcbId,
         type: 'INCOME',
@@ -156,7 +157,7 @@ class TestSeeder {
         category: 'Lương',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: vcbId,
         type: 'EXPENSE',
@@ -168,7 +169,7 @@ class TestSeeder {
         category: 'Ăn uống',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: mbId,
         type: 'EXPENSE',
@@ -182,7 +183,7 @@ class TestSeeder {
     );
 
     // ---- DATASET 5: Current Month (Tháng hiện tại) ----
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: vcbId,
         type: 'INCOME',
@@ -194,7 +195,7 @@ class TestSeeder {
         category: 'Lương',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: vcbId,
         type: 'EXPENSE',
@@ -206,7 +207,7 @@ class TestSeeder {
         category: 'Ăn uống',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: mbId,
         type: 'EXPENSE',
@@ -218,7 +219,7 @@ class TestSeeder {
         category: 'Mua sắm',
       ),
     );
-    await dbHelper.insertTransaction(
+    await ApiService.insertTransaction(
       TransactionModel(
         accountId: momoId,
         type: 'EXPENSE',
@@ -233,8 +234,9 @@ class TestSeeder {
   }
 
   static Future<void> clearTestData() async {
-    final db = await DatabaseHelper.instance.database;
-    await db.delete('transactions');
-    await db.delete('accounts');
+    final accounts = await ApiService.getAccounts();
+    for (var acc in accounts) {
+      await ApiService.deleteAccount(acc.id);
+    }
   }
 }

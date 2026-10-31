@@ -61,12 +61,56 @@ public class BankNotificationListenerService extends NotificationListenerService
                lowerPkg.contains("techcombank") ||
                lowerPkg.contains("acb") ||
                lowerPkg.contains("tpbank") ||
+               lowerPkg.contains("vpbank") ||
+               lowerPkg.contains("sacombank") ||
                lowerCombined.contains("momo") ||
                lowerCombined.contains("zalopay") ||
                lowerCombined.contains("bien dong so du") ||
+               lowerCombined.contains("biến động số dư") ||
                lowerCombined.contains("so du") ||
+               lowerCombined.contains("số dư") ||
                lowerCombined.contains("tai khoan") ||
-               lowerCombined.contains("nhận tiền");
+               lowerCombined.contains("tài khoản") ||
+               lowerCombined.contains("thanh toan") ||
+               lowerCombined.contains("thanh toán") ||
+               lowerCombined.contains("nhan tien") ||
+               lowerCombined.contains("nhận tiền") ||
+               lowerCombined.contains("giao dich") ||
+               lowerCombined.contains("giao dịch");
+    }
+
+    private String detectCategory(String type, String text) {
+        if (text == null) return type.equals("INCOME") ? "Lương" : "Khác";
+        String lower = text.toLowerCase();
+
+        if (type.equals("INCOME")) {
+            if (lower.contains("thuong") || lower.contains("thưởng")) return "Tiền thưởng";
+            return "Lương";
+        }
+
+        if (lower.contains("sieu thi") || lower.contains("siêu thị") || lower.contains("shopee") || lower.contains("lazada") || lower.contains("tiki") || lower.contains("coopmart") || lower.contains("winmart") || lower.contains("circle k") || lower.contains("gs25") || lower.contains("mua sam") || lower.contains("mua sắm")) {
+            return "Mua sắm";
+        }
+        if (lower.contains("highlands") || lower.contains("phuc long") || lower.contains("starbucks") || lower.contains("coffee") || lower.contains("grabfood") || lower.contains("shopeefood") || lower.contains("baemin") || lower.contains("quan an") || lower.contains("quán ăn") || lower.contains("nha hang") || lower.contains("nhà hàng") || lower.contains("bun") || lower.contains("pho") || lower.contains("phở") || lower.contains("com") || lower.contains("cơm") || lower.contains("ca phe") || lower.contains("cà phê")) {
+            return "Ăn uống";
+        }
+        if (lower.contains("grab") || lower.contains("be ") || lower.contains("gojek") || lower.contains("vato") || lower.contains("mai linh") || lower.contains("taxi") || lower.contains("xang") || lower.contains("xăng") || lower.contains("petrolimex") || lower.contains("ve xe") || lower.contains("vé xe")) {
+            return "Di chuyển";
+        }
+        if (lower.contains("dien") || lower.contains("điện") || lower.contains("nuoc") || lower.contains("nước") || lower.contains("internet") || lower.contains("fpt") || lower.contains("viettel") || lower.contains("vnpt") || lower.contains("truyen hinh") || lower.contains("truyền hình") || lower.contains("hoa don") || lower.contains("hóa đơn")) {
+            return "Hóa đơn";
+        }
+        if (lower.contains("game") || lower.contains("film") || lower.contains("cinema") || lower.contains("cgv") || lower.contains("lotte") || lower.contains("billiards") || lower.contains("karaoke")) {
+            return "Giải trí";
+        }
+        if (lower.contains("benh vien") || lower.contains("bệnh viện") || lower.contains("nha thuoc") || lower.contains("nhà thuốc") || lower.contains("pharmacity") || lower.contains("long chau") || lower.contains("long châu") || lower.contains("kham") || lower.contains("khám")) {
+            return "Sức khỏe";
+        }
+        if (lower.contains("hoc phi") || lower.contains("học phí") || lower.contains("truong") || lower.contains("trường") || lower.contains("sach") || lower.contains("sách")) {
+            return "Học tập";
+        }
+
+        return "Khác";
     }
 
     private void parseAndSaveTransaction(String pkg, String title, String text, String bigText, String summaryText) {
@@ -78,23 +122,21 @@ public class BankNotificationListenerService extends NotificationListenerService
         String lowerCombined = combined.toLowerCase();
 
         String bankName = "Ngân hàng/Ví";
-        if (lowerPkg.contains("vietcombank") || lowerPkg.contains("vcb")) bankName = "Vietcombank";
-        else if (lowerPkg.contains("mbmobile")) bankName = "MB Bank";
-        else if (lowerPkg.contains("agribank")) bankName = "Agribank";
-        else if (lowerPkg.contains("bidv")) bankName = "BIDV";
+        if (lowerPkg.contains("vietcombank") || lowerPkg.contains("vcb") || lowerCombined.contains("vietcombank")) bankName = "Vietcombank";
+        else if (lowerPkg.contains("mbmobile") || lowerCombined.contains("mb bank") || lowerCombined.contains("mbbank")) bankName = "MB Bank";
+        else if (lowerPkg.contains("agribank") || lowerCombined.contains("agribank")) bankName = "Agribank";
+        else if (lowerPkg.contains("bidv") || lowerCombined.contains("bidv")) bankName = "BIDV";
         else if (lowerPkg.contains("momo") || lowerPkg.contains("mservice") || lowerCombined.contains("momo")) bankName = "Ví Momo";
         else if (lowerPkg.contains("zalopay") || lowerCombined.contains("zalopay")) bankName = "ZaloPay";
-        else if (lowerPkg.contains("techcombank")) bankName = "Techcombank";
+        else if (lowerPkg.contains("techcombank") || lowerCombined.contains("techcombank")) bankName = "Techcombank";
 
         // Determine transaction type (INCOME or EXPENSE)
         String type = "EXPENSE";
-        if (combined.contains("+") || lowerCombined.contains("nhận") || lowerCombined.contains("tăng") || lowerCombined.contains("chuyển đến") || lowerCombined.contains("đã nhận") || lowerCombined.contains("cộng") || lowerCombined.contains("lãi")) {
+        if (lowerCombined.contains("+") || lowerCombined.contains("nhan tien") || lowerCombined.contains("nhận tiền") || lowerCombined.contains("cong") || lowerCombined.contains("cộng") || lowerCombined.contains("nap tien") || lowerCombined.contains("nạp tiền")) {
             type = "INCOME";
-        } else if (combined.contains("-") || lowerCombined.contains("trừ") || lowerCombined.contains("thanh toán") || lowerCombined.contains("chi") || lowerCombined.contains("rút") || lowerCombined.contains("chuyển đi")) {
-            type = "EXPENSE";
         }
 
-        // Extract amount
+        // Extract transaction amount
         double amount = extractAmount(combined);
         if (amount <= 0) {
             Log.d(TAG, "Could not extract valid amount from notification: " + combined);
@@ -148,7 +190,7 @@ public class BankNotificationListenerService extends NotificationListenerService
                 Log.d(TAG, "Auto created new account ID: " + accountId + " for " + bankName);
             }
 
-            // 2. Insert transaction
+            // 2. Insert transaction with smart detected category
             ContentValues txValues = new ContentValues();
             txValues.put("accountId", accountId);
             txValues.put("type", type);
@@ -157,7 +199,7 @@ public class BankNotificationListenerService extends NotificationListenerService
             txValues.put("description", combined);
             txValues.put("transactionTime", currentTime);
             txValues.put("source", "notification");
-            txValues.put("category", type.equals("INCOME") ? "Lương" : "Khác");
+            txValues.put("category", detectCategory(type, combined));
             db.insert("transactions", null, txValues);
 
             // 3. Update account balance
@@ -179,42 +221,49 @@ public class BankNotificationListenerService extends NotificationListenerService
     private double extractAmount(String text) {
         try {
             // 1. Try explicit signed currency pattern like +2,000VND or -50,000đ
-            Pattern signedCurrency = Pattern.compile("([+-])\\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]+)?|[0-9]+)\\s*(?:VND|vnd|đ|VNĐ|VNđ)", Pattern.CASE_INSENSITIVE);
+            Pattern signedCurrency = Pattern.compile("([+-])\\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]+)?|[0-9]+)\\s*(?:VND|vnd|đ|VNĐ|VNđ)?", Pattern.CASE_INSENSITIVE);
             Matcher mSigned = signedCurrency.matcher(text);
             if (mSigned.find()) {
                 String match = mSigned.group(2);
                 if (match != null) {
                     String clean = match.replace(".", "").replace(",", "");
-                    return Double.parseDouble(clean);
+                    double val = Double.parseDouble(clean);
+                    if (val >= 1000) return val;
                 }
             }
 
-            // 2. Try explicit amount after GD:
-            Pattern pGd = Pattern.compile("(?:GD|Giao dịch|Số tiền|Amount)[^0-9+-]*([+-]?)\\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]+)?|[0-9]+)", Pattern.CASE_INSENSITIVE);
+            // 2. Try explicit amount keywords
+            Pattern pGd = Pattern.compile("(?:GD|Giao dịch|Số tiền|Amount|thanh toán|chuyển|nhận)\\s*[:=]?\\s*([+-]?)\\s*([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]+)?|[0-9]+)", Pattern.CASE_INSENSITIVE);
             Matcher mGd = pGd.matcher(text);
             if (mGd.find()) {
                 String match = mGd.group(2);
                 if (match != null) {
                     String clean = match.replace(".", "").replace(",", "");
-                    return Double.parseDouble(clean);
+                    double val = Double.parseDouble(clean);
+                    if (val >= 1000) return val;
                 }
             }
 
             // 3. Fallback: find any number followed by VND, đ, VNĐ
             Pattern pCurrency = Pattern.compile("([0-9]{1,3}(?:[.,][0-9]{3})+(?:[.,][0-9]+)?|[0-9]+)\\s*(?:VND|vnd|đ|VNĐ|VNđ)", Pattern.CASE_INSENSITIVE);
             Matcher mCurrency = pCurrency.matcher(text);
-            double maxAmount = 0;
             while (mCurrency.find()) {
                 String match = mCurrency.group(1);
                 if (match != null) {
                     String clean = match.replace(".", "").replace(",", "");
                     double val = Double.parseDouble(clean);
-                    if (val > 0 && val < 1000000000 && (maxAmount == 0 || val < maxAmount)) {
-                        maxAmount = val;
-                    }
+                    if (val >= 1000) return val;
                 }
             }
-            if (maxAmount > 0) return maxAmount;
+
+            // 4. Fallback: find any 4-9 digit number
+            Pattern pNum = Pattern.compile("\\b([0-9]{4,9})\\b");
+            Matcher mNum = pNum.matcher(text);
+            if (mNum.find()) {
+                String match = mNum.group(1);
+                double val = Double.parseDouble(match);
+                if (val >= 1000) return val;
+            }
         } catch (Exception e) {
             Log.e(TAG, "Error extracting amount", e);
         }
@@ -233,7 +282,7 @@ public class BankNotificationListenerService extends NotificationListenerService
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error extracting/balance", e);
+            Log.e(TAG, "Error extracting balance", e);
         }
         return 0.0;
     }
@@ -248,6 +297,6 @@ public class BankNotificationListenerService extends NotificationListenerService
         } catch (Exception e) {
             // ignore
         }
-        return "";
+        return "Chính";
     }
 }

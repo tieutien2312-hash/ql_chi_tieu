@@ -5,6 +5,7 @@ import '../models/transaction_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/home_header.dart';
+import 'category_management_screen.dart';
 import 'transaction_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -126,12 +127,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Điều hướng trực tiếp tới TransactionScreen
+          // Điều hướng trực tiếp tới CategoryManagementScreen (Trang danh mục giao dịch)
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const TransactionScreen()),
+            MaterialPageRoute(builder: (context) => const CategoryManagementScreen()),
           ).then((_) {
-            // Load lại dữ liệu khi quay về từ màn hình thêm giao dịch
+            // Load lại dữ liệu khi quay về
             _loadData();
           });
         },

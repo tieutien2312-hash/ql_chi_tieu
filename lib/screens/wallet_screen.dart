@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/account.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'wallet_detail_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -97,7 +98,6 @@ class _WalletScreenState extends State<WalletScreen> {
                     createdAt: currentTime,
                   );
                   await ApiService.insertAccount(newAcc);
-                  if (!context.mounted) return;
                   Navigator.pop(context);
                   _loadAccounts();
                 }
@@ -125,12 +125,7 @@ class _WalletScreenState extends State<WalletScreen> {
         false;
 
     if (confirm) {
-      if (id is int) {
-        await ApiService.deleteAccount(id);
-      } else {
-        // if id is guid string or dynamic
-        await ApiService.deleteAccount(int.tryParse(id.toString()) ?? 0);
-      }
+      await ApiService.deleteAccount(id);
       _loadAccounts();
     }
   }
@@ -151,7 +146,7 @@ class _WalletScreenState extends State<WalletScreen> {
                         children: [
                           Icon(Icons.account_balance_wallet_outlined, size: 64, color: Colors.grey.shade400),
                           const SizedBox(height: 12),
-                          const Text('Chưa có tài khoản nào được lưu từ API.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)),
+                          const Text('Chưa có tài khoản nào được lưu.', style: TextStyle(color: AppTheme.textSecondary, fontSize: 15)),
                           const SizedBox(height: 16),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryCyan, foregroundColor: Colors.white),
@@ -170,50 +165,61 @@ class _WalletScreenState extends State<WalletScreen> {
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
                           elevation: 1,
+                          clipBehavior: Clip.antiAlias,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                             side: const BorderSide(color: AppTheme.borderLight),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 26,
-                                  backgroundColor: AppTheme.primaryCyan.withOpacity(0.15),
-                                  child: const Icon(Icons.account_balance, color: AppTheme.primaryCyanDark),
+                          child: InkWell(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => WalletDetailScreen(account: acc),
                                 ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        acc.bankName,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${acc.accountName} (${_maskAccountNumber(acc.accountNumber)})',
-                                        style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        '${_currencyFormat.format(acc.balance)} VNĐ',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                          color: AppTheme.primaryCyanDark,
-                                        ),
-                                      ),
-                                    ],
+                              ).then((_) => _loadAccounts());
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 26,
+                                    backgroundColor: AppTheme.primaryCyan.withOpacity(0.15),
+                                    child: const Icon(Icons.account_balance, color: AppTheme.primaryCyanDark),
                                   ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: AppTheme.errorRed),
-                                  onPressed: () => _deleteAccount(acc.id),
-                                ),
-                              ],
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          acc.bankName,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.textPrimary),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${acc.accountName} (${_maskAccountNumber(acc.accountNumber)})',
+                                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          '${_currencyFormat.format(acc.balance)} VNĐ',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                            color: AppTheme.primaryCyanDark,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: AppTheme.errorRed),
+                                    onPressed: () => _deleteAccount(acc.id!),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );

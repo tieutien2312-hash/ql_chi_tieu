@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="ql_chi_tieu"
+        android:label="Moni"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -28,7 +29,7 @@
 
         <service
             android:name=".BankNotificationListenerService"
-            android:label="Quản lý chi tiêu Notification Listener"
+            android:label="Moni Notification Listener"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
