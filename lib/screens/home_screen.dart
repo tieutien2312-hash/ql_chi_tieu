@@ -239,14 +239,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecentTransactionsSection() {
+    final recentList = _recentTransactions.take(5).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Giao dịch gần đây', style: TextStyle(color: Color(0xFF142F38), fontSize: 18, fontWeight: FontWeight.bold)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Giao dịch gần đây', style: TextStyle(color: Color(0xFF142F38), fontSize: 18, fontWeight: FontWeight.bold)),
+            if (_recentTransactions.length > 5)
+              TextButton(
+                onPressed: () {},
+                child: const Text('Xem tất cả', style: TextStyle(color: AppTheme.primaryCyan, fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+          ],
+        ),
         const SizedBox(height: 12),
         _isLoading
             ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryCyan))
-            : _recentTransactions.isEmpty
+            : recentList.isEmpty
                 ? Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -264,18 +276,45 @@ class _HomeScreenState extends State<HomeScreen> {
                 : ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _recentTransactions.length,
+                    itemCount: recentList.length,
                     itemBuilder: (context, index) {
-                      final tx = _recentTransactions[index];
+                      final tx = recentList[index];
                       final isIncome = tx.type == 'INCOME';
                       return Card(
                         margin: const EdgeInsets.only(bottom: 10),
                         elevation: 0,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFE8EFF2))),
                         child: ListTile(
-                          title: Text(tx.description, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                          subtitle: Text(tx.transactionTime, style: const TextStyle(fontSize: 12)),
-                          trailing: Text('${isIncome ? '+' : '−'}${_currencyFormat.format(tx.amount)} ₫', style: TextStyle(fontWeight: FontWeight.bold, color: isIncome ? Colors.green : Colors.red)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: isIncome ? Colors.green.shade50 : Colors.red.shade50,
+                            child: Icon(
+                              isIncome ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                              color: isIncome ? Colors.green : Colors.red,
+                              size: 18,
+                            ),
+                          ),
+                          title: Text(
+                            tx.description.isNotEmpty ? tx.description : (tx.category ?? 'Giao dịch'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF142F38)),
+                          ),
+                          subtitle: Text(
+                            '${tx.transactionTime}${tx.category != null && tx.category!.isNotEmpty ? ' · ${tx.category}' : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF75868D)),
+                          ),
+                          trailing: Text(
+                            '${isIncome ? '+' : '−'}${_currencyFormat.format(tx.amount)} ₫',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: isIncome ? Colors.green : Colors.red,
+                            ),
+                          ),
                         ),
                       );
                     },

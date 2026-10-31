@@ -20,7 +20,7 @@ class BillScanScreen extends StatefulWidget {
 }
 
 class _BillScanScreenState extends State<BillScanScreen> {
-  static const String _geminiApiKey = 'vv';
+  static const String _geminiApiKey = 'v';
 
   File? _imageFile;
   bool _isScanning = false;
