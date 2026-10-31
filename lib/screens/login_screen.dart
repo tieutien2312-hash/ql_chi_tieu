@@ -16,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
   Future<void> _handleLogin() async {
@@ -48,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       setState(() {
-        _errorMessage = 'Đăng nhập thất bại. Kiểm tra lại email, mật khẩu hoặc quyền hạn.';
+        _errorMessage = 'Đăng nhập thất bại. Kiểm tra lại email hoặc mật khẩu.';
       });
     }
   }
@@ -77,11 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'ASP.NET Core Web API Backend',
-                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-                    textAlign: TextAlign.center,
-                  ),
+
                   const SizedBox(height: 24),
                   if (_errorMessage != null) ...[
                     Container(
@@ -96,13 +93,27 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                   TextField(
                     controller: _emailController,
-                    decoration: const InputDecoration(labelText: 'Email hoặc Tên đăng nhập', prefixIcon: Icon(Icons.email_outlined)),
+                    decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(labelText: 'Mật khẩu', prefixIcon: Icon(Icons.lock_outline)),
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: 'Mật khẩu',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: AppTheme.textSecondary,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
